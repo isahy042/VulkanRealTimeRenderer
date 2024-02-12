@@ -200,11 +200,10 @@ private:
 	// vertices
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
 
 	void loadModel(){
-		// try to load a mesh for now.
+		// return multiple vertex and index shaders. 
+		// Also return, for each instance, a basic transformation, and an animation transformation.
 	}
 
 	// picking physical device 

@@ -157,6 +157,15 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\A1sceneViewer\include\camera.h" />
+    <ClInclude Include="..\..\..\A1sceneViewer\include\driver.h" />
+    <ClInclude Include="..\..\..\A1sceneViewer\include\helper.h" />
+    <ClInclude Include="..\..\..\A1sceneViewer\include\mesh.h" />
+    <ClInclude Include="..\..\..\A1sceneViewer\include\node.h" />
+    <ClInclude Include="..\..\..\A1sceneViewer\include\vector.h" />
+    <ClInclude Include="s72parser.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
