@@ -78,6 +78,7 @@ struct SwapChainSupportDetails {
 
 struct Vertex {
 	Vec3f pos;
+	Vec3f normal;
 	Vec3f color;
 	Vec2f texCoord;
 	//glm::vec3 color;
@@ -92,8 +93,8 @@ struct Vertex {
 		return bindingDescription;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -103,12 +104,18 @@ struct Vertex {
 		attributeDescriptions[1].binding = 0;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
+		attributeDescriptions[1].offset = offsetof(Vertex, normal);
+
 
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+		attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[2].offset = offsetof(Vertex, color);
+
+		attributeDescriptions[3].binding = 0;
+		attributeDescriptions[3].location = 3;
+		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
 
 		return attributeDescriptions;
 	}
@@ -205,40 +212,32 @@ private:
 	VkImageView depthImageView;
 
 	// vertices
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
+	vector<Vertex> vertices;
+	vector<uint32_t> indices;
 
-	void loadModel(){
+	void loadModel() {
 		scene.parseJson(s72filepath);
 		// create objects
 		scene.InstantiateObjects();
 		// one vertex buffer for each object!
-		// just one buffer for now.
-		// scene.objects[0];
-		// incorporate normal!
-		indices = scene.objects[0].mesh.indices;
-		for (int i = 0; i < scene.objects[0].mesh.count; i++) {
-			//cout << "current position"<< scene.objects[0].position[i].x << scene.objects[0].position[i].y << scene.objects[0].position[i].z;
-			vertices.push_back({ scene.objects[0].position[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+		// just two buffers for now.
+
+		// TODO: incorporate normal!
+
+		uint32_t total = 0;
+		for (int obj = 0; obj < scene.objects.size(); obj++) {
+			for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
+				//cout << "current position"<< scene.objects[0].position[i].x << scene.objects[0].position[i].y << scene.objects[0].position[i].z;
+				vertices.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+				indices.push_back(total);
+				total++;
+			}
 		}
+		cout << total << " indices.\n";
 
-		//vertices  = {
-		//	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-		//	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-		//	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-		//	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
 
-		//	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-		//	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-		//	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-		//	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-		//};
 
-		//indices = {
-		//	0, 1, 2, 2, 3, 0
-		//};
-		// return multiple vertex and index shaders. 
-		// Also return, for each instance, a basic transformation, and an animation transformation.
+
 	}
 
 	// picking physical device 
@@ -986,7 +985,7 @@ private:
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		UniformBufferObject ubo{};
-		
+
 		ubo.model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		// ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.f,0.f,0.f), glm::vec3(0.0f, 0.0f, 1.0f));
 		ubo.view = glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -1211,24 +1210,24 @@ private:
 
 	// index buffer
 	void createIndexBuffer() {
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-	void* data;
-	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, indices.data(), (size_t)bufferSize);
-	vkUnmapMemory(device, stagingBufferMemory);
+		void* data;
+		vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, indices.data(), (size_t)bufferSize);
+		vkUnmapMemory(device, stagingBufferMemory);
 
-	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
 
-	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+		copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
-}
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
 
 	// descriptor pool
 	void createDescriptorSetLayout() {
@@ -1256,7 +1255,7 @@ private:
 			throw std::runtime_error("failed to create descriptor set layout!");
 		}
 	}
-	
+
 	void createDescriptorPool() {
 		std::array<VkDescriptorPoolSize, 2> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1320,7 +1319,7 @@ private:
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
 	}
-	
+
 	void createUniformBuffers() {
 		VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
@@ -1449,7 +1448,7 @@ private:
 
 		endSingleTimeCommands(commandBuffer);
 	}
-	
+
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
 		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -1497,7 +1496,7 @@ private:
 	{
 		textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
-	
+
 	void createTextureSampler() {
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
