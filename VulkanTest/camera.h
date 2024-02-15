@@ -48,6 +48,27 @@ public:
         return s;
     }
 
+    // built from https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/building-basic-perspective-projection-matrix.html
+    void buildProjectionMatrix() {
+        Vec44f proj = Vec44f(Vec4f(0.f));
+
+        float tanHalfFOV = std::tan(vfov / 2.0f);
+        float fovX = std::atan(tanHalfFOV * aspect);
+        float fovY = std::atan(tanHalfFOV);
+
+        proj[0][0] = 1.0f / (std::tan(fovX));
+        proj[1][1] = 1.0f / (std::tan(fovY));
+        proj[2][2] = -(far + near) / (far - near);
+        proj[2][3] = -1.0f;
+        proj[3][2] = -(2.0f * far * near) / (far - near);
+
+        projectionMatrix = proj;
+    }
+
+    void applyTrasformation() {
+    }
+
+    Vec44f projectionMatrix = Vec44f(Vec4f(0.f));
 private:
     string name = "";
     Vec2f resolution = Vec2f(480, 600);

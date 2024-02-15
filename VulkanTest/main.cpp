@@ -31,6 +31,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+# include "s72parser.h"
+
 // using directive
 using namespace std;
 
@@ -75,9 +77,11 @@ struct SwapChainSupportDetails {
 };
 
 struct Vertex {
-	glm::vec3 pos;
-	glm::vec3 color;
-	glm::vec2 texCoord;
+	Vec3f pos;
+	Vec3f color;
+	Vec2f texCoord;
+	//glm::vec3 color;
+	//glm::vec2 texCoord;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription{};
@@ -110,6 +114,7 @@ struct Vertex {
 	}
 };
 
+
 struct UniformBufferObject {
 	alignas(16) glm::mat4 model;
 	alignas(16) glm::mat4 view;
@@ -120,6 +125,8 @@ struct UniformBufferObject {
 class HelloTriangleApplication {
 
 public:
+	Scene scene = Scene();
+	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Support.s72";
 	void run() {
 		initWindow();
 		initVulkan();
@@ -202,6 +209,34 @@ private:
 	std::vector<uint32_t> indices;
 
 	void loadModel(){
+		scene.parseJson(s72filepath);
+		// create objects
+		scene.InstantiateObjects();
+		// one vertex buffer for each object!
+		// just one buffer for now.
+		// scene.objects[0];
+		// incorporate normal!
+		indices = scene.objects[0].mesh.indices;
+		for (int i = 0; i < scene.objects[0].mesh.count; i++) {
+			//cout << "current position"<< scene.objects[0].position[i].x << scene.objects[0].position[i].y << scene.objects[0].position[i].z;
+			vertices.push_back({ scene.objects[0].position[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+		}
+
+		//vertices  = {
+		//	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+		//	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+		//	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+		//	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+
+		//	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+		//	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+		//	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+		//	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+		//};
+
+		//indices = {
+		//	0, 1, 2, 2, 3, 0
+		//};
 		// return multiple vertex and index shaders. 
 		// Also return, for each instance, a basic transformation, and an animation transformation.
 	}
@@ -951,9 +986,12 @@ private:
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+		
+		ubo.model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		// ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.f,0.f,0.f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.view = glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 1000.0f);
 		ubo.proj[1][1] *= -1;
 
 		memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1471,7 +1509,7 @@ private:
 		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
 		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 		//Instead of enforcing the availability of anisotropic filtering, it’s also possible to simply not use it by conditionally setting:
 		// samplerInfo.maxAnisotropy = 1.0f;
