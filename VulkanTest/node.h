@@ -58,12 +58,29 @@ public:
         mesh = m;
         position = m.position; // this is supposed to be a deep copy
         normal = m.normal;
+        bbmin = m.bbmin;
+        bbmax = m.bbmax;
     }
 
     int applyTransformation(Vec3f scale, Vec3f translate, Vec4f rotate){
+
+        bbmax = Vec3f(-INFINITY);
+        bbmin = Vec3f(INFINITY);
+
         for (int i = 0; i < mesh.count; i++) {
             Vec3f v = position[i];
             Vec3f n = normal[i];
+            Vec4f vhomo = Vec4f(v.x, v.y, v.z, 1.f);
+
+            Vec44f t = scaleToMatrix4(scale);
+
+            t = matmul4444(quaternionToMatrix4(rotate), t);
+
+            t = matmul4444(transToMatrix4(translate), t);
+
+            vhomo = matmul444(t, vhomo);
+
+
             // scale vertex
             v = v * scale;
             // rotate vertex and normal
@@ -74,6 +91,19 @@ public:
             v += translate;
             position[i] = v;
             normal[i] = n;
+
+            // TODO: divide by w term!
+
+
+            // update bounding box
+            bbmax.x = max(bbmax.x, v.x);
+            bbmax.y = max(bbmax.y, v.y);
+            bbmax.z = max(bbmax.z, v.z);
+
+            bbmin.x = min(bbmin.x, v.x);
+            bbmin.y = min(bbmin.y, v.y);
+            bbmin.z = min(bbmin.z, v.z);
+
         }
 
         //cout << "printing the vertices.. \n";
@@ -84,9 +114,13 @@ public:
 
     }
 
+
     Mesh mesh;
     vector<Vec3f> position;
     vector<Vec3f> normal;
+    Vec3f bbmax;
+    Vec3f bbmin;
+    bool culled = false;
 
 
 };

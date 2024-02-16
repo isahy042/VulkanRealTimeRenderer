@@ -6,6 +6,8 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp> // For glm::make_mat4
+#include <glm/gtx/quaternion.hpp>
 
 # include <vulkan/vulkan.h>
 
@@ -123,7 +125,8 @@ struct Vertex {
 
 
 struct UniformBufferObject {
-	alignas(16) glm::mat4 model;
+	// std430 in the layout qualifier
+	alignas(16) glm::mat4 model; //column major
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 };
@@ -987,10 +990,12 @@ private:
 		UniformBufferObject ubo{};
 
 		ubo.model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		// ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.f,0.f,0.f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 1000.0f);
+		// https://gamedev.stackexchange.com/questions/189013/how-does-glmlookat-produce-a-view-matrix
+
+		ubo.view = makeUboMatrix(scene.cameras[0].viewMatrix);//glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0, 0, 0), glm::vec3(0.0f, 0.0f, 1.0f));
+
+		ubo.proj = makeUboMatrix(scene.cameras[0].projectionMatrix);
 		ubo.proj[1][1] *= -1;
 
 		memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));

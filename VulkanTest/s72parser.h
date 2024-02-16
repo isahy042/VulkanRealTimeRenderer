@@ -74,6 +74,7 @@ public:
     vector<int> roots;
 
     vector<Camera> cameras;
+    Camera currCam;
     vector<Node> nodes;
     vector<Mesh> meshes;
     vector<Driver> drivers;
@@ -155,6 +156,7 @@ public:
                             camera.setValue(getName(line), getValue(line));
                             std::getline(file, line);
                         }
+                        camera.buildProjectionAndViewMatrix();
                         cameras.push_back(camera);
                         s72map.push_back(make_pair(3, cameras.size() - 1));
                     }
@@ -247,10 +249,15 @@ public:
 
         Camera c = cameras[s72map[at].second];
         // TODO: transform camera.
-        c.buildProjectionMatrix();
+        
         return 1;
 
     }
 
+    int cull() {
+        for (Object & obj : objects) {
+            obj.culled = currCam.testIntersect(obj.bbmax, obj.bbmin);
+        }
+    }
 
     };

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "vector.h"
+#include "helper.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -133,6 +134,12 @@ public:
             infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
             infile.read(reinterpret_cast<char*>(&f3), sizeof(f3));
             position.push_back(Vec3f(f1, f2, f3));
+            bbmax.x = max(bbmax.x, f1);
+            bbmax.y = max(bbmax.y, f2);
+            bbmax.z = max(bbmax.z, f3);
+            bbmin.x = min(bbmin.x, f1);
+            bbmin.y = min(bbmin.y, f2);
+            bbmin.z = min(bbmin.z, f3);
             infile.read(reinterpret_cast<char*>(&f1), sizeof(f1));
             infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
             infile.read(reinterpret_cast<char*>(&f3), sizeof(f3));
@@ -175,6 +182,9 @@ public:
     vector<Vec3f> position;
     vector<Vec3f> normal;
     vector<Vec4uc> color;
+
+    Vec3f bbmax = Vec3f(-INFINITY);
+    Vec3f bbmin = Vec3f(INFINITY);
 
 private:
         bool inputIndices = false;
