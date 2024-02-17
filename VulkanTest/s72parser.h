@@ -202,7 +202,6 @@ public:
 
        // bind drivers
        for (int d = 0; d < drivers.size(); d++) {
-
            Driver drive = drivers[d];
            int n = drive.node;
            if (s72map[n].first != 2) {
@@ -222,8 +221,9 @@ public:
                nodes[s72map[n].second].driveScale = true; 
                nodes[s72map[n].second].scaleDriver = d;
            }
-           else printf("translation channel not supported.");
            
+           else printf("translation channel not supported.");
+
            totalFrames = std::max(totalFrames, static_cast<int>(ceil(drive.times.back() * FPS)));
        }
        if (drivers.size() == 0) totalFrames = 2;
@@ -264,6 +264,8 @@ public:
         o.transformMatrix = generateTransformationMatrix(scales, trans, rotates);
         o.updateBoundingBox();
         objects.push_back(o);
+
+        cout << "\n setting" << nodeAt << " " << objects.size() - 1;
         nodeToObj[nodeAt] = objects.size() - 1;
     }
 
@@ -293,8 +295,10 @@ public:
     }
 
     void updateNodeTransformMatrix(int root, int time, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+
+        //cout << "updating node. \n";
         Node n = nodes[s72map[root].second];
-        
+        //cout << "examing node " << root <<". scale translate rotate: " << n.driveScale <<n.driveTranslate<<n.driveRotate <<"\n";
         // push transformations onto vectors
         if (n.driveScale) {
             scales.push_back(drivers[n.scaleDriver].getScale(time));
@@ -304,20 +308,18 @@ public:
         }
         if (n.driveTranslate) {
             trans.push_back(drivers[n.transDriver].getTranslate(time));
-            cout << "channel is set to \n" << drivers[n.transDriver].channel;
         }
         else {
             trans.push_back(n.translate);
         }
         if (n.driveRotate) {
             rotates.push_back(drivers[n.rotateDriver].getRotate(time));
-            cout << "channel is set to \n" << drivers[n.transDriver].channel;
         }
         else {
             rotates.push_back(n.rotate);
         }
-        //scales.push_back(n.scale);
-        //rotates.push_back(n.rotate);
+       // scales.push_back(n.scale);
+       // rotates.push_back(n.rotate);
         //trans.push_back(n.translate);
 
         if (n.camera > 0) updateCameraTransformMatrix(n.camera, scales, trans, rotates);
@@ -339,7 +341,6 @@ public:
         int index = nodeToObj[nodeAt];
         objects[index].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
         objects[index].updateBoundingBox();
-
     }
     
     int cull() {

@@ -22,13 +22,13 @@ public:
         }
         else if (n == "channel")
         {
-            val = val.substr(1, val.size() - 2);
+            val = val.substr(1, val.size() - 3);
+            
             if (val == "translation") channel = 0;
             else if (val == "rotation") channel = 1;
             else if (val == "scale") channel = 2;
-            else printf("translation channel not supported.");
+            else  cout << "translation channel not supported. " << val;
 
-            
         }
         else if (n == "times")
         {
@@ -41,10 +41,10 @@ public:
         else if (n == "interpolation")
         {
             val = val.substr(1, val.size() - 2);
-            if (val == "STEP") channel = 0;
-            else if (val == "LINEAR") channel = 1;
-            else if (val == "SLERP") channel = 2;
-            else printf("translation mpde not supported.");
+            if (val == "STEP") mode = 0;
+            else if (val == "LINEAR") mode = 1;
+            else if (val == "SLERP") mode = 2;
+            else cout << "interpolation method not supported. " << val;
         }
     }
     
@@ -111,7 +111,7 @@ public:
 private:
 
     int findInterval(int time) {
-        float t = static_cast<float>(time) / FPS;
+        float t = static_cast<float>(time) / FPSi;
         if (times[0] >= t) return -1;
         else if (times.back() <= t) return intervals - 1;
         for (int i = 1; i < intervals; i++) {
@@ -141,7 +141,7 @@ private:
         // linearly interpolate
         float intervalSize = times[interval + 1] - times[interval];
 
-        float t = static_cast<float>(time) / FPS;
+        float t = static_cast<float>(time) / FPSi;
         float weight1 = (t - times[interval]) / intervalSize;
         float weight2 = 1 - weight1;
 
@@ -156,7 +156,7 @@ private:
         // linearly interpolate
         float intervalSize = times[interval + 1] - times[interval];
 
-        float t = static_cast<float>(time) / FPS;
+        float t = static_cast<float>(time) / FPSi;
         float weight1 = (t - times[interval]) / intervalSize;
         float weight2 = 1 - weight1;
 
