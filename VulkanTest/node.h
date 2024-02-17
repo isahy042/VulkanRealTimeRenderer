@@ -120,7 +120,7 @@ public:
     vector<Vec3f> normal;
     Vec3f bbmax;
     Vec3f bbmin;
-    bool culled = false;
+    bool inFrame = true;
 
 
 };

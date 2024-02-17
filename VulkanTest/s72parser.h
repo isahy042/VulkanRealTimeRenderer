@@ -256,7 +256,7 @@ public:
 
     int cull() {
         for (Object & obj : objects) {
-            obj.culled = currCam.testIntersect(obj.bbmax, obj.bbmin);
+            obj.inFrame = currCam.testIntersect(obj.bbmax, obj.bbmin);
         }
     }
 

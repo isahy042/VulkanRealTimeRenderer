@@ -38,7 +38,7 @@
 // using directive
 using namespace std;
 
-const uint32_t WIDTH = 800;
+uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const string currRepo = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/A0/VulkanRepo/"; // for some reason this needs to be added manually :(
@@ -190,18 +190,18 @@ private:
 
 	bool framebufferResized = false;
 
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+	vector<VkBuffer> vertexBuffer;
+	vector<VkDeviceMemory> vertexBufferMemory;
+	vector<VkBuffer> indexBuffer;
+	vector<VkDeviceMemory> indexBufferMemory;
 
-	std::vector<VkBuffer> uniformBuffers;
-	std::vector<VkDeviceMemory> uniformBuffersMemory;
-	std::vector<void*> uniformBuffersMapped;
+	vector<vector<VkBuffer>> uniformBuffers;
+	vector<vector<VkDeviceMemory>> uniformBuffersMemory;
+	vector<vector<void*>> uniformBuffersMapped;
 
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
+	vector<VkDescriptorSet> descriptorSets;
 
 	// texture
 	VkImage textureImage;
@@ -215,8 +215,10 @@ private:
 	VkImageView depthImageView;
 
 	// vertices
-	vector<Vertex> vertices;
-	vector<uint32_t> indices;
+	vector<vector<Vertex>> vertices;
+	vector<vector<uint32_t>> indices;
+
+	int totalObjects = 0;
 
 	void loadModel() {
 		scene.parseJson(s72filepath);
@@ -225,21 +227,23 @@ private:
 		// one vertex buffer for each object!
 		// just two buffers for now.
 
-		// TODO: incorporate normal!
+		// TODO: allocate multiple vertex buffer, render them.
 
-		uint32_t total = 0;
+		int c = 0;
 		for (int obj = 0; obj < scene.objects.size(); obj++) {
+			vector<Vertex> v;
+			vector<uint32_t> ind;
+
 			for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
-				//cout << "current position"<< scene.objects[0].position[i].x << scene.objects[0].position[i].y << scene.objects[0].position[i].z;
-				vertices.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
-				indices.push_back(total);
-				total++;
+				v.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+				ind.push_back(i);
+
 			}
+			vertices.push_back(v);
+			indices.push_back(ind);
+			
 		}
-		cout << total << " indices.\n";
-
-
-
+		totalObjects = scene.objects.size();
 
 	}
 
@@ -942,14 +946,19 @@ private:
 		scissor.extent = swapChainExtent;
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-		VkBuffer vertexBuffers[] = { vertexBuffer };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+		//cout << "debugging! \n";
+		for (int obj = 0; obj < totalObjects; obj++) {
+			
+			VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+			vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame* totalObjects) + obj], 0, nullptr);
+			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 
-		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		}
+
 
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -981,7 +990,7 @@ private:
 		}
 	}
 
-	void updateUniformBuffer(uint32_t currentImage) {
+	void updateUniformBuffer(uint32_t currentImage, int objIndex) {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
@@ -993,12 +1002,15 @@ private:
 
 		// https://gamedev.stackexchange.com/questions/189013/how-does-glmlookat-produce-a-view-matrix
 
-		ubo.view = makeUboMatrix(scene.cameras[0].viewMatrix);//glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0, 0, 0), glm::vec3(0.0f, 0.0f, 1.0f));
+		//ubo.view = makeUboMatrix(scene.cameras[0].viewMatrix);//glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0, 0, 0), glm::vec3(0.0f, 0.0f, 1.0f));
 
-		ubo.proj = makeUboMatrix(scene.cameras[0].projectionMatrix);
+		//ubo.proj = makeUboMatrix(scene.cameras[0].projectionMatrix);
+		//ubo.proj[1][1] *= -1;
+		ubo.view = glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0, 0, 0), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10000.0f);
 		ubo.proj[1][1] *= -1;
 
-		memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+		memcpy(uniformBuffersMapped[objIndex][currentImage], &ubo, sizeof(ubo));
 	}
 
 	void drawFrame() {
@@ -1017,8 +1029,11 @@ private:
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
 
-		updateUniformBuffer(currentFrame);
-
+		// doing this for multiple vertex buffers!
+		for (int obj = 0; obj < totalObjects; obj++) {
+			updateUniformBuffer(currentFrame, obj);
+		}
+		
 		// manually reset the fence to the unsignaled state
 		// Only reset the fence if we are submitting work
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -1110,8 +1125,8 @@ private:
 	}
 
 	// vertex buffer
-	void createVertexBuffer() {
-		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+	void createVertexBuffer(int objIndex) {
+		VkDeviceSize bufferSize = sizeof(vertices[0][0]) * vertices[objIndex].size();
 
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
@@ -1119,12 +1134,12 @@ private:
 
 		void* data;
 		vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, vertices.data(), (size_t)bufferSize);
+		memcpy(data, vertices[objIndex].data(), (size_t)bufferSize);
 		vkUnmapMemory(device, stagingBufferMemory);
 
-		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer[objIndex], vertexBufferMemory[objIndex]);
 
-		copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+		copyBuffer(stagingBuffer, vertexBuffer[objIndex], bufferSize);
 
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1214,8 +1229,8 @@ private:
 	}
 
 	// index buffer
-	void createIndexBuffer() {
-		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+	void createIndexBuffer(int objIndex) {
+		VkDeviceSize bufferSize = sizeof(indices[0][0]) * indices[objIndex].size();
 
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
@@ -1223,12 +1238,12 @@ private:
 
 		void* data;
 		vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, indices.data(), (size_t)bufferSize);
+		memcpy(data, indices[objIndex].data(), (size_t)bufferSize);
 		vkUnmapMemory(device, stagingBufferMemory);
 
-		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer[objIndex], indexBufferMemory[objIndex]);
 
-		copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+		copyBuffer(stagingBuffer, indexBuffer[objIndex], bufferSize);
 
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1264,15 +1279,15 @@ private:
 	void createDescriptorPool() {
 		std::array<VkDescriptorPoolSize, 2> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create descriptor pool!");
@@ -1280,62 +1295,72 @@ private:
 	}
 
 	void createDescriptorSets() {
-		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * totalObjects, descriptorSetLayout); 
+
 		VkDescriptorSetAllocateInfo allocInfo{};
+
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = descriptorPool;
-		allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		allocInfo.pSetLayouts = layouts.data();
 
-		descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+		descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * totalObjects);
+
 		if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate descriptor sets!");
 		}
 
+
+		// when 1D array, store so that all objects of one frame are together.
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = uniformBuffers[i];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
+			for (size_t obj = 0; obj < totalObjects; obj++) {
+				VkDescriptorBufferInfo bufferInfo{};
+				bufferInfo.buffer = uniformBuffers[obj][i];
+				bufferInfo.offset = 0;
+				bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorImageInfo imageInfo{};
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = textureImageView;
-			imageInfo.sampler = textureSampler;
+				VkDescriptorImageInfo imageInfo{};
+				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo.imageView = textureImageView;
+				imageInfo.sampler = textureSampler;
 
-			std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+				std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
-			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[0].dstSet = descriptorSets[i];
-			descriptorWrites[0].dstBinding = 0;
-			descriptorWrites[0].dstArrayElement = 0;
-			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].pBufferInfo = &bufferInfo;
+				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[0].dstBinding = 0;
+				descriptorWrites[0].dstArrayElement = 0;
+				descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrites[0].descriptorCount = 1;
+				descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSets[i];
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;
+				descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[1].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[1].dstBinding = 1;
+				descriptorWrites[1].dstArrayElement = 0;
+				descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[1].descriptorCount = 1;
+				descriptorWrites[1].pImageInfo = &imageInfo;
 
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+			}
+
+
 		}
+
 	}
 
-	void createUniformBuffers() {
+	void createUniformBuffers(int objIndex) {
 		VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
-		uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-		uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-		uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+		uniformBuffers[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		uniformBuffersMemory[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		uniformBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
+			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[objIndex][i], uniformBuffersMemory[objIndex][i]);
 
-			vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+			vkMapMemory(device, uniformBuffersMemory[objIndex][i], 0, bufferSize, 0, &uniformBuffersMapped[objIndex][i]);
 		}
 	}
 
@@ -1602,12 +1627,24 @@ private:
 		createTextureSampler();
 
 		loadModel();
-		createVertexBuffer();
-		createIndexBuffer();
-		createUniformBuffers();
-		createDescriptorPool();
-		createDescriptorSets();
 
+		vertexBuffer.resize(totalObjects);
+		vertexBufferMemory.resize(totalObjects);
+		indexBuffer.resize(totalObjects);
+		indexBufferMemory.resize(totalObjects);
+		uniformBuffers.resize(totalObjects);
+		uniformBuffersMemory.resize(totalObjects);
+		uniformBuffersMapped.resize(totalObjects);
+
+		createDescriptorPool();
+
+		for (int obj = 0; obj < totalObjects; obj++) {
+			createVertexBuffer(obj);
+			createIndexBuffer(obj);
+			createUniformBuffers(obj);
+		}
+
+		createDescriptorSets();
 		createCommandBuffer();
 		createSyncObjects();
 	}
@@ -1631,18 +1668,20 @@ private:
 		vkDestroyImage(device, textureImage, nullptr);
 		vkFreeMemory(device, textureImageMemory, nullptr);
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-			vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+		for (size_t obj = 0; obj < totalObjects; obj++) {
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+				vkDestroyBuffer(device, uniformBuffers[obj][i], nullptr);
+				vkFreeMemory(device, uniformBuffersMemory[obj][i], nullptr);
+			}
 		}
-
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-		vkDestroyBuffer(device, vertexBuffer, nullptr);
-		vkFreeMemory(device, vertexBufferMemory, nullptr);
+		for (size_t obj = 0; obj < totalObjects; obj++) {
+			vkDestroyBuffer(device, vertexBuffer[obj], nullptr);
+			vkFreeMemory(device, vertexBufferMemory[obj], nullptr);
+		}
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
 

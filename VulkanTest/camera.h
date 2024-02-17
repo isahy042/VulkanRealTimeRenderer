@@ -21,6 +21,9 @@ public:
             nearfrustum.push_back(Vec3f(0.f));
             farfrustum.push_back(Vec3f(0.f));
         }
+        for (int i = 0; i < 6; i++) {
+            normals.push_back(Vec3f(0.f));
+        }
     }
 
     void setValue(string n, string val)
@@ -79,10 +82,10 @@ public:
         float halfWidthNear = halfHeightNear * aspect;
 
         // Coordinates of the four corners of the viewing plane at the near distance
-        nearfrustum[0] = Vec3f(-halfWidthNear, halfHeightNear, -near);
+        nearfrustum[0] = Vec3f(-halfWidthNear, halfHeightNear, -near); // clockwise
         nearfrustum[1] = Vec3f(halfWidthNear, halfHeightNear, -near);
-        nearfrustum[2] = Vec3f(-halfWidthNear, -halfHeightNear, -near);
-        nearfrustum[3] = Vec3f(halfWidthNear, -halfHeightNear, -near);
+        nearfrustum[2] = Vec3f(halfWidthNear, -halfHeightNear, -near);
+        nearfrustum[3] = Vec3f(-halfWidthNear, -halfHeightNear, -near);
 
         float halfHeightFar = far * tan(vfov / 2.0f);
         float halfWidthFar = halfHeightFar * aspect;
@@ -90,21 +93,77 @@ public:
         // Coordinates of the four corners of the viewing plane at the near distance
         farfrustum[0] = Vec3f(-halfWidthFar, halfHeightFar, -far);
         farfrustum[1] = Vec3f(halfWidthFar, halfHeightFar, -far);
-        farfrustum[2] = Vec3f(-halfWidthFar, -halfHeightFar, -far);
-        farfrustum[3] = Vec3f(halfWidthFar, -halfHeightFar, -far);
+        farfrustum[2] = Vec3f(halfWidthFar, -halfHeightFar, -far);
+        farfrustum[3] = Vec3f(-halfWidthFar, -halfHeightFar, -far);
     }
 
+    void updateNormal() {
+        normals[0] = cross((farfrustum[0] - farfrustum[1]),(farfrustum[2] - farfrustum[1])); // far plane
+        normals[1] = cross((nearfrustum[2] - nearfrustum[1]), (nearfrustum[0] - nearfrustum[1])); // near plane
+        normals[2] = cross((nearfrustum[0] - nearfrustum[3]),(farfrustum[1] - nearfrustum[3])); // top plane
+        normals[3] = cross((farfrustum[3] - nearfrustum[3]), (nearfrustum[0] - nearfrustum[3])); // left plane
+        normals[4] = cross((farfrustum[3] - farfrustum[2]), (nearfrustum[2] - farfrustum[2])); // bottom plane
+        normals[5] = cross((farfrustum[1] - nearfrustum[3]), (nearfrustum[2] - nearfrustum[3])); // right plane
+    }
     void applyTrasformation() {
-
+        // update frustum
+        // update normal
+        updateNormal();
     }
 
     Vec44f projectionMatrix = Vec44f(Vec4f(0.f));
     Vec44f viewMatrix = Vec44f(Vec4f(0.f));
 
     bool testIntersect(Vec3f bbmax, Vec3f bbmin) {
+        vector<Vec3f> bbcorners;
+        bbcorners.push_back(Vec3f(bbmin.x, bbmin.y, bbmin.z)); // Min corner (x, y, z)
+        bbcorners.push_back(Vec3f(bbmin.x, bbmin.y, bbmax.z));
+        bbcorners.push_back(Vec3f(bbmin.x, bbmax.y, bbmin.z ));
+        bbcorners.push_back(Vec3f(bbmin.x, bbmax.y, bbmax.z));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmin.y, bbmin.z));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmin.y, bbmax.z ));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmin.z ));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmax.z ));
+
         // either one of the bb corner is inside the furstum or one of the frustum corner is in the bb.
+        // bb corner inside frustum
+        for (int corner = 0; corner < 8; corner++) {
+            if ((dot(bbcorners[corner] - farfrustum[0], normals[0]) < 0)) {
+                continue;
+            }
+            if ((dot(bbcorners[corner] - nearfrustum[0], normals[1]) < 0)) {
+                continue;
+            }
+            if ((dot(bbcorners[corner] - farfrustum[0], normals[2]) < 0)) {
+                continue;
+            }
+            if ((dot(bbcorners[corner] - farfrustum[0], normals[3]) < 0)) {
+                continue;
+            }
+            if ((dot(bbcorners[corner] - farfrustum[2], normals[4]) < 0)) {
+                continue;
+            }
+            if ((dot(bbcorners[corner] - farfrustum[2], normals[5]) < 0)) {
+                continue;
+            }
+            return true;
+        }
+        
+        // furstum corner inside bb
+        for (int corner = 0; corner < 4; corner++) {
+            if ((farfrustum[corner].x >= bbmin.x) && (farfrustum[corner].x <= bbmax.x) &&
+                (farfrustum[corner].y >= bbmin.y) && (farfrustum[corner].y <= bbmax.y) &&
+                (farfrustum[corner].z >= bbmin.z) && (farfrustum[corner].z <= bbmax.z)) {
+                return true;
+            }
+            if ((nearfrustum[corner].x >= bbmin.x) && (nearfrustum[corner].x <= bbmax.x) &&
+                (nearfrustum[corner].y >= bbmin.y) && (nearfrustum[corner].y <= bbmax.y) &&
+                (nearfrustum[corner].z >= bbmin.z) && (nearfrustum[corner].z <= bbmax.z)) {
+                return true;
+            }
+        }
         // otherwise, false
-        return true;
+        return false;
     }
 
 private:
@@ -120,6 +179,7 @@ private:
     Vec4f initRot = Vec4f(0, 0, 0, 0);
     vector<Vec3f> nearfrustum;
     vector<Vec3f> farfrustum;
+    vector<Vec3f> normals;
 
 
 };

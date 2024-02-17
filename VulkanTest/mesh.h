@@ -33,6 +33,7 @@ public:
         else if (n == "count")
         {
             count = stoi(val);
+            cout << "\nmesh " << name << "is set to " << count;
         }
         else if (n == "indicies")
         {
