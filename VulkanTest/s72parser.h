@@ -9,6 +9,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include "camera.h"
 #include "mesh.h"
@@ -16,6 +17,16 @@
 #include "node.h"
 
 using namespace std;
+
+/**
+To do list (Finish by Wed.):
+Json parser (load)
+Loading and viewing
+
+// for later
+Vector Library (3 hr)
+Report (3 hr)
+*/
 
 
 
@@ -36,6 +47,27 @@ inline string getValue(string line)
     return line.substr(start + 1, end - start + 1);
 }
 
+//inline float extractFloat(string line)
+//{
+//    std::size_t start = line.find(':');
+//    std::size_t end = line.find(',', start + 1);
+//    if (start == string::npos || end == string::npos)
+//    {
+//        // error.
+//    }
+//    return std::stof(line.substr(start + 1, end - start - 2));
+//}
+//
+//inline string extractstring(string line)
+//{
+//    std::size_t start = line.find(':');
+//    std::size_t end = line.find('"', start + 2);
+//    if (start == string::npos || end == string::npos)
+//    {
+//        // error.
+//    }
+//    return line.substr(start + 2, end - start - 3);
+//}
 class Scene {
 public:
     vector<pair<int, int>> s72map; // (type, index in type vector)
@@ -43,11 +75,12 @@ public:
     vector<int> roots;
 
     vector<Camera> cameras;
-    Camera currCam;
+    Camera *currCam;
     vector<Node> nodes;
     vector<Mesh> meshes;
     vector<Driver> drivers;
     vector<Object> objects;
+    map<int, int> nodeToObj;
 
     Scene() {}
 
@@ -125,7 +158,7 @@ public:
                             camera.setValue(getName(line), getValue(line));
                             std::getline(file, line);
                         }
-                        camera.buildProjectionAndViewMatrix();
+                        camera.initializeProjection();
                         cameras.push_back(camera);
                         s72map.push_back(make_pair(3, cameras.size() - 1));
                     }
@@ -146,7 +179,7 @@ public:
         return 1;
     }
 
-    // first scene graph traversal
+    // first traversal of graph - constructing it
     int InstantiateObjects() {
        cout << "Instantiating Objects.. \n";
        if (sceneInd == -1) { 
@@ -162,7 +195,7 @@ public:
            instantiateNode(root, scales, trans, rotates);
        }
 
-
+       currCam = &cameras[0];
     }
 
     int instantiateNode(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates){
@@ -175,7 +208,7 @@ public:
         rotates.push_back(n.rotate);
 
         if (n.camera > 0) instantiateCamera(n.camera, scales, trans, rotates);
-        if (n.mesh > 0) instantiateMesh(n.mesh, scales, trans, rotates);
+        if (n.mesh > 0) instantiateMesh(n.mesh, root, scales, trans, rotates);
         if (n.children.size() > 0) {
             for (int& child : n.children) {
                 instantiateNode(child, scales, trans, rotates);
@@ -186,28 +219,20 @@ public:
     }
 
     // construct graph!
-    int instantiateMesh(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
-        cout << "Instantiating Mesh " << at << "\n";
+    int instantiateMesh(int meshAt, int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+        cout << "Instantiating Mesh " << meshAt << "\n";
         // check if mesh
-        if (s72map[at].first != 1) {
-            printf("wants to instantiate mesh, but given object %d instead. \n", s72map[at].first);
+        if (s72map[meshAt].first != 1) {
+            printf("wants to instantiate mesh, but given object %d instead. \n", s72map[meshAt].first);
             return 0;
         }
-        Object o = Object(meshes[s72map[at].second]);
+        Object o = Object(meshes[s72map[meshAt].second]);
         // TODO: condense into a single transformation matrix, and perform a single matmul with homogenous coordinates.
-        vector<Vec44f> v = generateTransformationMatrix(scales, trans, rotates);
-        o.transformMatrix = v[0];
-        o.normalTransformMatrix = v[1];
-
-        while (!rotates.empty()) {
-            // applying its scale, rotation, and translation values (in that order)
-            o.applyTransformation(scales.back(), trans.back(), rotates.back());
-            scales.pop_back();
-            trans.pop_back();
-            rotates.pop_back();
-        }
-
+        int transformations = scales.size();
+        o.transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        o.updateBoundingBox();
         objects.push_back(o);
+        nodeToObj[nodeAt] = objects.size() - 1;
     }
 
     int instantiateCamera(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
@@ -216,49 +241,75 @@ public:
             printf("wants to instantiate camera, but given object %d instead. \n", s72map[at].first);
             return 0;
         }
-
-        Camera c = cameras[s72map[at].second];
         // TODO: transform camera.
-        
+        cameras[s72map[at].second].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
+
         return 1;
 
     }
 
+    // traverse graph!
+    void updateSceneTransformMatrix() {
+        // perform graph traversal, assuming no back edge.
+        for (int& root : roots) {
+            vector<Vec3f> scales;
+            vector<Vec3f> trans;
+            vector<Vec4f> rotates;
+            instantiateNode(root, scales, trans, rotates);
+        }
+    }
+
+    void updateNodeTransformMatrix(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+        Node n = nodes[s72map[root].second];
+
+        // push transformations onto vectors
+        scales.push_back(n.scale);
+        trans.push_back(n.translate);
+        rotates.push_back(n.rotate);
+
+        if (n.camera > 0) updateCameraTransformMatrix(n.camera, scales, trans, rotates);
+        if (n.mesh > 0) updateMeshTransformMatrix(root, scales, trans, rotates);
+        if (n.children.size() > 0) {
+            for (int& child : n.children) {
+                updateNodeTransformMatrix(child, scales, trans, rotates);
+            }
+        }
+    }
+
+    void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+        cout << "\ncamera transform called.\n";
+        cameras[s72map[at].second].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
+    }
+
+    int updateMeshTransformMatrix(int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+        // get obj index
+        int index = nodeToObj[nodeAt];
+        objects[index].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        objects[index].updateBoundingBox();
+
+    }
+    
     int cull() {
         for (Object & obj : objects) {
-            obj.inFrame = currCam.testIntersect(obj.bbmax, obj.bbmin);
+            obj.inFrame = (*currCam).testIntersect(obj.bbmax, obj.bbmin);
         }
-        return 1;
     }
 
-    vector<Vec44f> generateTransformationMatrix(vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    Vec44f generateTransformationMatrix(vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         Vec44f transformation = identity44();
-        Vec33f normaltransformation = identity33();
         Vec44f temp;
         while (!rotates.empty()) {
             // applying its scale, rotation, and translation values (in that order)
             transformation = matmul4444(scaleToMatrix4(scales.back()), transformation);
-            temp = matmul4444(transToMatrix4(trans.back()), quaternionToMatrix4(rotates.back()));
-            normaltransformation = matmul3333(quaternionToMatrix(rotates.back()), normaltransformation);
+            temp = matmul4444(transToMatrix4(trans.back()), quaternionToMatrix4(rotates.back()));  
             transformation = matmul4444(temp, transformation);
             scales.pop_back();
             trans.pop_back();
             rotates.pop_back();
         }
 
-        vector<Vec44f> result;
-
-        result.push_back(transformation);
-
-        temp = Vec44f(Vec4f(0.f));
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                temp[i][j] = normaltransformation[i][j]; // fit vec33f into vec44f with empty last row and col
-            }
-        }
-        result.push_back(temp);
-
-        return result;
+        return transformation;
     }
-
     };

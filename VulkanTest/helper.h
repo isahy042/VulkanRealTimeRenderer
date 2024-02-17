@@ -145,7 +145,12 @@ inline Vec44f matmul4444(Vec44f m1, Vec44f m2) {
     return m;
 }
 
+Vec3f transformPos(Vec44f t, Vec3f pos) {
 
+    Vec4f newp = matmul444(t, Vec4f(pos.x, pos.y, pos.z, 1.f));
+    return Vec3f(newp[0], newp[1], newp[2]) / newp[3];
+
+}
 
 /**
 Matrix Operation
@@ -338,6 +343,7 @@ float* makeUboMatrix(Vec44f t) {
             t[2][0], t[2][1], t[2][2], t[2][3],
             t[3][0], t[3][1], t[3][2], t[3][3]
     };
+
     return p;
 }
 

@@ -57,7 +57,8 @@ public:
     }
 
     // built from https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/building-basic-perspective-projection-matrix.html
-    void buildProjectionAndViewMatrix() {
+    void initializeProjection() {
+        transformMatrix = identity44();
 
         Vec44f proj = Vec44f(Vec4f(0.f));
         float scaleVfov = 1 / std::tan(vfov / 2.0f);
@@ -67,15 +68,6 @@ public:
         proj[2][3] = -1.0f;
         proj[3][2] = - (far * near) / (far - near);
         projectionMatrix = proj;
-
-        Vec44f view = Vec44f(Vec4f(0.f));
-        Vec44f q = quaternionToMatrix4(Vec4f(0.336097, -0.0491895, -0.182892, 0.922589));
-        Vec44f t = transToMatrix4(Vec3f(-6.41319, -17.984, 24.0639));
-        view44(q, "quaternion \n");
-        view44(t, "trans \n");
-
-        viewMatrix = transpose44(invert44(matmul4444(t, q)));
-        view44(viewMatrix, "view matrix \n ");
 
         // fill in frustum data
         float halfHeightNear = near * tan(vfov / 2.0f);
@@ -105,14 +97,20 @@ public:
         normals[4] = cross((farfrustum[3] - farfrustum[2]), (nearfrustum[2] - farfrustum[2])); // bottom plane
         normals[5] = cross((farfrustum[1] - nearfrustum[3]), (nearfrustum[2] - nearfrustum[3])); // right plane
     }
+    
     void applyTrasformation() {
         // update frustum
+        for (int f = 0; f < 4; f++) {
+            farfrustum[f] = transformPos(transformMatrix, farfrustum[f]);
+            nearfrustum[f] = transformPos(transformMatrix, nearfrustum[f]);
+        }
         // update normal
         updateNormal();
     }
 
     Vec44f projectionMatrix = Vec44f(Vec4f(0.f));
     Vec44f viewMatrix = Vec44f(Vec4f(0.f));
+    Vec44f transformMatrix = Vec44f(Vec4f(0.f));
 
     bool testIntersect(Vec3f bbmax, Vec3f bbmin) {
         vector<Vec3f> bbcorners;

@@ -1,4 +1,4 @@
-
+ï»¿
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -38,8 +38,9 @@
 // using directive
 using namespace std;
 
-uint32_t WIDTH = 800;
+const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
+const uint32_t FPS = 50;
 
 const string currRepo = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/A0/VulkanRepo/"; // for some reason this needs to be added manually :(
 
@@ -126,8 +127,7 @@ struct Vertex {
 
 struct UniformBufferObject {
 	// std430 in the layout qualifier
-	alignas(16) glm::mat4 model;// float model[16]; //column major (not columnn major?)
-	//alignas(16) float normal[16];
+	alignas(16) float model[16]; //column major
 	alignas(16) float view[16];
 	alignas(16) float proj[16];
 };
@@ -221,8 +221,6 @@ private:
 
 	int totalObjects = 0;
 
-	bool Culling = false; // if true, cull.
-
 	void loadModel() {
 		scene.parseJson(s72filepath);
 		// create objects
@@ -238,13 +236,13 @@ private:
 			vector<uint32_t> ind;
 
 			for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
-				v.push_back({scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+				v.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
 				ind.push_back(i);
 
 			}
 			vertices.push_back(v);
 			indices.push_back(ind);
-			
+
 		}
 		totalObjects = scene.objects.size();
 
@@ -951,23 +949,14 @@ private:
 
 		//cout << "debugging! \n";
 		for (int obj = 0; obj < totalObjects; obj++) {
-			if (scene.objects[obj].inFrame) {
-				VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
-				VkDeviceSize offsets[] = { 0 };
-				vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-				vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
-				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
 
-				cout << "\n object " << obj;
-				VkMemoryRequirements memRequirements;
-				vkGetBufferMemoryRequirements(device, vertexBuffers[0], &memRequirements);
-				cout << "\nsize of vertex buffer is " << memRequirements.size;
+			VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-				vkGetBufferMemoryRequirements(device, indexBuffer[obj], &memRequirements);
-				cout << "\nsize of index buffer is " << memRequirements.size;
-
-				vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
-			}
+			vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
+			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 
 		}
 
@@ -1003,43 +992,17 @@ private:
 	}
 
 	void updateUniformBuffer(uint32_t currentImage, int objIndex) {
-		static auto startTime = std::chrono::high_resolution_clock::now();
+		//static auto startTime = std::chrono::high_resolution_clock::now();
 
-		auto currentTime = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		//auto currentTime = std::chrono::high_resolution_clock::now();
+		//float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		UniformBufferObject ubo{};
 
-		float *m = makeUboMatrix(transpose44(invert44(scene.objects[objIndex].transformMatrix)));
-		//std::memcpy(ubo.model, m, 16 * sizeof(float));
-		
-		glm::mat4 mm = glm::mat4(1.0f);
-
-		cout << objIndex << " obj. \n";
-
-		ubo.model = mm;
-
-		view44(scene.objects[objIndex].transformMatrix, "getting the transform matrix \n");
-
-		cout << "\n glm\n";
-			for (int i = 0; i < 4; ++i) {
-				for (int j = 0; j < 4; ++j) {
-					std::cout << mm[i][j] << " ";
-				}
-				std::cout << std::endl;
-			}
-	
-
-		/*m = makeUboMatrix(scene.objects[objIndex].normalTransformMatrix);
-		std::memcpy(ubo.normal, m, 16 * sizeof(float));*/
-
-		m = makeUboMatrix(scene.cameras[0].viewMatrix);
-		std::memcpy(ubo.view, m, 16 * sizeof(float));
-
-		m = makeUboMatrix(scene.cameras[0].projectionMatrix);
-		std::memcpy(ubo.proj, m, 16 * sizeof(float));
+		std::memcpy(ubo.model, makeUboMatrix(transpose44(scene.objects[objIndex].transformMatrix)), 16 * sizeof(float));
+		std::memcpy(ubo.view, makeUboMatrix((*scene.currCam).viewMatrix), 16 * sizeof(float));
+		std::memcpy(ubo.proj, makeUboMatrix((*scene.currCam).projectionMatrix), 16 * sizeof(float));
 		ubo.proj[5] *= -1;
-
 
 		memcpy(uniformBuffersMapped[objIndex][currentImage], &ubo, sizeof(ubo));
 	}
@@ -1060,15 +1023,11 @@ private:
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
 
-		// druve
 		// doing this for multiple vertex buffers!
+		scene.updateSceneTransformMatrix();
 		for (int obj = 0; obj < totalObjects; obj++) {
 			updateUniformBuffer(currentFrame, obj);
-			// update bounding box
-			scene.objects[obj].updateBoundingBox(); // TODO: update for animation
 		}
-
-		if (Culling) scene.cull(); // frustum culling 
 
 		// manually reset the fence to the unsignaled state
 		// Only reset the fence if we are submitting work
@@ -1331,7 +1290,7 @@ private:
 	}
 
 	void createDescriptorSets() {
-		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * totalObjects, descriptorSetLayout); 
+		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * totalObjects, descriptorSetLayout);
 
 		VkDescriptorSetAllocateInfo allocInfo{};
 
@@ -1576,7 +1535,7 @@ private:
 		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
 		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		//Instead of enforcing the availability of anisotropic filtering, it’s also possible to simply not use it by conditionally setting:
+		//Instead of enforcing the availability of anisotropic filtering, itï¿½s also possible to simply not use it by conditionally setting:
 		// samplerInfo.maxAnisotropy = 1.0f;
 		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 		samplerInfo.unnormalizedCoordinates = VK_FALSE;
