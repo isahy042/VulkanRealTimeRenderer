@@ -40,7 +40,7 @@ using namespace std;
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
-const uint32_t FPS = 50;
+
 
 const string currRepo = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/A0/VulkanRepo/"; // for some reason this needs to be added manually :(
 
@@ -60,7 +60,7 @@ const bool enableValidationLayers = true;
 #endif
 
 // defines how many frames should be processed concurrently
-const int MAX_FRAMES_IN_FLIGHT = 2;
+int MAX_FRAMES_IN_FLIGHT = 2;
 
 // structs
 
@@ -137,7 +137,7 @@ class HelloTriangleApplication {
 
 public:
 	Scene scene = Scene();
-	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Support.s72";
+	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Articulation.s72";
 	void run() {
 		initWindow();
 		initVulkan();
@@ -245,6 +245,7 @@ private:
 
 		}
 		totalObjects = scene.objects.size();
+		MAX_FRAMES_IN_FLIGHT = scene.totalFrames;
 
 	}
 
@@ -1022,9 +1023,9 @@ private:
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
-
+		
 		// doing this for multiple vertex buffers!
-		scene.updateSceneTransformMatrix();
+		scene.updateSceneTransformMatrix(currentFrame);
 		for (int obj = 0; obj < totalObjects; obj++) {
 			updateUniformBuffer(currentFrame, obj);
 		}
@@ -1259,6 +1260,7 @@ private:
 		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		samplerLayoutBinding.pImmutableSamplers = nullptr;
 		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		
 
 		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -1601,6 +1603,7 @@ private:
 	}
 
 	void initVulkan() {
+		loadModel();
 
 		createInstance();
 		createSurface();
@@ -1620,8 +1623,6 @@ private:
 		//createTextureImage();
 		//createTextureImageView();
 		createTextureSampler();
-
-		loadModel();
 
 		vertexBuffer.resize(totalObjects);
 		vertexBufferMemory.resize(totalObjects);

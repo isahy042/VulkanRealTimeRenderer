@@ -21,6 +21,13 @@ public:
     int mesh = -1;
     int camera = -1;
 
+    bool driveScale = false;
+    bool driveTranslate = false;
+    bool driveRotate = false;
+    int transDriver = -1;
+    int rotateDriver = -1;
+    int scaleDriver = -1;
+
     void setValue(string n, string val)
     {
         if (n == "translation")
@@ -75,6 +82,5 @@ public:
     Vec3f bbmin;
     bool inFrame = true;
     Vec44f transformMatrix;
-
 
 };

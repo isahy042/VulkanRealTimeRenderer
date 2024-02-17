@@ -17,7 +17,7 @@
 using namespace std;
 
 const string FOLDER = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/";
-
+const int FPS = 50;
 
 // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
 // https://github.com/MonoGame/MonoGame/blob/develop/MonoGame.Framework/Matrix.cs
@@ -240,7 +240,6 @@ Vec44f invert44(Vec44f mat) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
             r[i][j] = inv[cnt] * det;
-            cout << "\n rij" << r[i][j];
             cnt++;
         }
     }

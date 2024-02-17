@@ -82,6 +82,8 @@ public:
     vector<Object> objects;
     map<int, int> nodeToObj;
 
+    int totalFrames = 0;
+
     Scene() {}
 
     int parseJson(string filepath)
@@ -162,7 +164,7 @@ public:
                         cameras.push_back(camera);
                         s72map.push_back(make_pair(3, cameras.size() - 1));
                     }
-                    else if (objName == "DRIVE")
+                    else if (objName == "DRIVE") // 4 - driver
                     {
                         Driver driver = Driver();
                         std::getline(file, line); // name
@@ -171,6 +173,9 @@ public:
                             driver.setValue(getName(line), getValue(line));
                             std::getline(file, line);
                         }
+                        driver.initializeData();
+                        drivers.push_back(driver);
+                        s72map.push_back(make_pair(4, drivers.size() - 1));
                     }
 
                 }
@@ -195,6 +200,33 @@ public:
            instantiateNode(root, scales, trans, rotates);
        }
 
+       // bind drivers
+       for (int d = 0; d < drivers.size(); d++) {
+
+           Driver drive = drivers[d];
+           int n = drive.node;
+           if (s72map[n].first != 2) {
+               printf("wants to drive a node, driving something else. \n");
+               return 0;
+           }
+
+           if (drive.channel == 0) {
+               nodes[s72map[n].second].driveTranslate = true;
+               nodes[s72map[n].second].transDriver = d;
+           }
+           else if (drive.channel == 1) {
+               nodes[s72map[n].second].driveRotate = true;
+               nodes[s72map[n].second].rotateDriver = d;
+           }
+           else if (drive.channel == 2) { 
+               nodes[s72map[n].second].driveScale = true; 
+               nodes[s72map[n].second].scaleDriver = d;
+           }
+           else printf("translation channel not supported.");
+           
+           totalFrames = std::max(totalFrames, static_cast<int>(ceil(drive.times.back() * FPS)));
+       }
+       if (drivers.size() == 0) totalFrames = 2;
        currCam = &cameras[0];
     }
 
@@ -250,40 +282,59 @@ public:
     }
 
     // traverse graph!
-    void updateSceneTransformMatrix() {
+    void updateSceneTransformMatrix(int time) {
         // perform graph traversal, assuming no back edge.
         for (int& root : roots) {
             vector<Vec3f> scales;
             vector<Vec3f> trans;
             vector<Vec4f> rotates;
-            instantiateNode(root, scales, trans, rotates);
+            updateNodeTransformMatrix(root, time, scales, trans, rotates);
         }
     }
 
-    void updateNodeTransformMatrix(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    void updateNodeTransformMatrix(int root, int time, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         Node n = nodes[s72map[root].second];
-
+        
         // push transformations onto vectors
-        scales.push_back(n.scale);
-        trans.push_back(n.translate);
-        rotates.push_back(n.rotate);
+        if (n.driveScale) {
+            scales.push_back(drivers[n.scaleDriver].getScale(time));
+        }
+        else {
+            scales.push_back(n.scale);
+        }
+        if (n.driveTranslate) {
+            trans.push_back(drivers[n.transDriver].getTranslate(time));
+            cout << "channel is set to \n" << drivers[n.transDriver].channel;
+        }
+        else {
+            trans.push_back(n.translate);
+        }
+        if (n.driveRotate) {
+            rotates.push_back(drivers[n.rotateDriver].getRotate(time));
+            cout << "channel is set to \n" << drivers[n.transDriver].channel;
+        }
+        else {
+            rotates.push_back(n.rotate);
+        }
+        //scales.push_back(n.scale);
+        //rotates.push_back(n.rotate);
+        //trans.push_back(n.translate);
 
         if (n.camera > 0) updateCameraTransformMatrix(n.camera, scales, trans, rotates);
         if (n.mesh > 0) updateMeshTransformMatrix(root, scales, trans, rotates);
         if (n.children.size() > 0) {
             for (int& child : n.children) {
-                updateNodeTransformMatrix(child, scales, trans, rotates);
+                updateNodeTransformMatrix(child, time, scales, trans, rotates);
             }
         }
     }
 
     void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
-        cout << "\ncamera transform called.\n";
         cameras[s72map[at].second].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
     }
 
-    int updateMeshTransformMatrix(int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    void updateMeshTransformMatrix(int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         // get obj index
         int index = nodeToObj[nodeAt];
         objects[index].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
