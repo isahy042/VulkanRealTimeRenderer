@@ -17,16 +17,6 @@
 
 using namespace std;
 
-/**
-To do list (Finish by Wed.):
-Json parser (load)
-Loading and viewing
-
-// for later
-Vector Library (3 hr)
-Report (3 hr)
-*/
-
 
 
 inline string getName(string line)
@@ -46,27 +36,6 @@ inline string getValue(string line)
     return line.substr(start + 1, end - start + 1);
 }
 
-//inline float extractFloat(string line)
-//{
-//    std::size_t start = line.find(':');
-//    std::size_t end = line.find(',', start + 1);
-//    if (start == string::npos || end == string::npos)
-//    {
-//        // error.
-//    }
-//    return std::stof(line.substr(start + 1, end - start - 2));
-//}
-//
-//inline string extractstring(string line)
-//{
-//    std::size_t start = line.find(':');
-//    std::size_t end = line.find('"', start + 2);
-//    if (start == string::npos || end == string::npos)
-//    {
-//        // error.
-//    }
-//    return line.substr(start + 2, end - start - 3);
-//}
 class Scene {
 public:
     vector<pair<int, int>> s72map; // (type, index in type vector)
@@ -177,6 +146,7 @@ public:
         return 1;
     }
 
+    // first scene graph traversal
     int InstantiateObjects() {
        cout << "Instantiating Objects.. \n";
        if (sceneInd == -1) { 
@@ -225,19 +195,19 @@ public:
         }
         Object o = Object(meshes[s72map[at].second]);
         // TODO: condense into a single transformation matrix, and perform a single matmul with homogenous coordinates.
-        int transformations = scales.size();
+        vector<Vec44f> v = generateTransformationMatrix(scales, trans, rotates);
+        o.transformMatrix = v[0];
+        o.normalTransformMatrix = v[1];
 
-
-        while(!rotates.empty()) {
+        while (!rotates.empty()) {
             // applying its scale, rotation, and translation values (in that order)
-            o.applyTransformation(scales.back(), trans.back(),rotates.back());
+            o.applyTransformation(scales.back(), trans.back(), rotates.back());
             scales.pop_back();
             trans.pop_back();
             rotates.pop_back();
         }
-        objects.push_back(o);
-        
 
+        objects.push_back(o);
     }
 
     int instantiateCamera(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
@@ -258,6 +228,37 @@ public:
         for (Object & obj : objects) {
             obj.inFrame = currCam.testIntersect(obj.bbmax, obj.bbmin);
         }
+        return 1;
+    }
+
+    vector<Vec44f> generateTransformationMatrix(vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+        Vec44f transformation = identity44();
+        Vec33f normaltransformation = identity33();
+        Vec44f temp;
+        while (!rotates.empty()) {
+            // applying its scale, rotation, and translation values (in that order)
+            transformation = matmul4444(scaleToMatrix4(scales.back()), transformation);
+            temp = matmul4444(transToMatrix4(trans.back()), quaternionToMatrix4(rotates.back()));
+            normaltransformation = matmul3333(quaternionToMatrix(rotates.back()), normaltransformation);
+            transformation = matmul4444(temp, transformation);
+            scales.pop_back();
+            trans.pop_back();
+            rotates.pop_back();
+        }
+
+        vector<Vec44f> result;
+
+        result.push_back(transformation);
+
+        temp = Vec44f(Vec4f(0.f));
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                temp[i][j] = normaltransformation[i][j]; // fit vec33f into vec44f with empty last row and col
+            }
+        }
+        result.push_back(temp);
+
+        return result;
     }
 
     };

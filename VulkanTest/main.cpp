@@ -126,9 +126,10 @@ struct Vertex {
 
 struct UniformBufferObject {
 	// std430 in the layout qualifier
-	alignas(16) glm::mat4 model; //column major
-	alignas(16) glm::mat4 view;
-	alignas(16) glm::mat4 proj;
+	alignas(16) glm::mat4 model;// float model[16]; //column major (not columnn major?)
+	//alignas(16) float normal[16];
+	alignas(16) float view[16];
+	alignas(16) float proj[16];
 };
 
 // skipped message callback in setup > validation layers (so no setupDebugMessenger implemented.)
@@ -220,6 +221,8 @@ private:
 
 	int totalObjects = 0;
 
+	bool Culling = false; // if true, cull.
+
 	void loadModel() {
 		scene.parseJson(s72filepath);
 		// create objects
@@ -235,7 +238,7 @@ private:
 			vector<uint32_t> ind;
 
 			for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
-				v.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+				v.push_back({scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
 				ind.push_back(i);
 
 			}
@@ -948,14 +951,23 @@ private:
 
 		//cout << "debugging! \n";
 		for (int obj = 0; obj < totalObjects; obj++) {
-			
-			VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
-			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+			if (scene.objects[obj].inFrame) {
+				VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
+				VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
 
-			vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame* totalObjects) + obj], 0, nullptr);
-			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
+				cout << "\n object " << obj;
+				VkMemoryRequirements memRequirements;
+				vkGetBufferMemoryRequirements(device, vertexBuffers[0], &memRequirements);
+				cout << "\nsize of vertex buffer is " << memRequirements.size;
+
+				vkGetBufferMemoryRequirements(device, indexBuffer[obj], &memRequirements);
+				cout << "\nsize of index buffer is " << memRequirements.size;
+
+				vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
+			}
 
 		}
 
@@ -998,17 +1010,36 @@ private:
 
 		UniformBufferObject ubo{};
 
-		ubo.model = glm::mat4(1.0f);//glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		float *m = makeUboMatrix(transpose44(invert44(scene.objects[objIndex].transformMatrix)));
+		//std::memcpy(ubo.model, m, 16 * sizeof(float));
+		
+		glm::mat4 mm = glm::mat4(1.0f);
 
-		// https://gamedev.stackexchange.com/questions/189013/how-does-glmlookat-produce-a-view-matrix
+		cout << objIndex << " obj. \n";
 
-		//ubo.view = makeUboMatrix(scene.cameras[0].viewMatrix);//glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0, 0, 0), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.model = mm;
 
-		//ubo.proj = makeUboMatrix(scene.cameras[0].projectionMatrix);
-		//ubo.proj[1][1] *= -1;
-		ubo.view = glm::lookAt(glm::vec3(-6.41319, -17.984, 24.0639), glm::vec3(0, 0, 0), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10000.0f);
-		ubo.proj[1][1] *= -1;
+		view44(scene.objects[objIndex].transformMatrix, "getting the transform matrix \n");
+
+		cout << "\n glm\n";
+			for (int i = 0; i < 4; ++i) {
+				for (int j = 0; j < 4; ++j) {
+					std::cout << mm[i][j] << " ";
+				}
+				std::cout << std::endl;
+			}
+	
+
+		/*m = makeUboMatrix(scene.objects[objIndex].normalTransformMatrix);
+		std::memcpy(ubo.normal, m, 16 * sizeof(float));*/
+
+		m = makeUboMatrix(scene.cameras[0].viewMatrix);
+		std::memcpy(ubo.view, m, 16 * sizeof(float));
+
+		m = makeUboMatrix(scene.cameras[0].projectionMatrix);
+		std::memcpy(ubo.proj, m, 16 * sizeof(float));
+		ubo.proj[5] *= -1;
+
 
 		memcpy(uniformBuffersMapped[objIndex][currentImage], &ubo, sizeof(ubo));
 	}
@@ -1029,11 +1060,16 @@ private:
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
 
+		// druve
 		// doing this for multiple vertex buffers!
 		for (int obj = 0; obj < totalObjects; obj++) {
 			updateUniformBuffer(currentFrame, obj);
+			// update bounding box
+			scene.objects[obj].updateBoundingBox(); // TODO: update for animation
 		}
-		
+
+		if (Culling) scene.cull(); // frustum culling 
+
 		// manually reset the fence to the unsignaled state
 		// Only reset the fence if we are submitting work
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);

@@ -60,12 +60,18 @@ public:
         normal = m.normal;
         bbmin = m.bbmin;
         bbmax = m.bbmax;
+        transformMatrix = identity44();
+        normalTransformMatrix = identity44();
+        normalTransformMatrix[3][3] = 0.f;
     }
 
-    int applyTransformation(Vec3f scale, Vec3f translate, Vec4f rotate){
+    int applyTransformation(Vec3f scale, Vec3f translate,Vec4f rotate){
+       
 
         bbmax = Vec3f(-INFINITY);
         bbmin = Vec3f(INFINITY);
+
+
 
         for (int i = 0; i < mesh.count; i++) {
             Vec3f v = position[i];
@@ -106,14 +112,13 @@ public:
 
         }
 
-        //cout << "printing the vertices.. \n";
-        //for (Vec3f& pos : position) {
-        //    cout << pos.x << " " << pos.y << " " << pos.z << " \n";
-        //}
+
         return 1;
 
     }
 
+    void updateBoundingBox() {
+    }
 
     Mesh mesh;
     vector<Vec3f> position;
@@ -121,6 +126,7 @@ public:
     Vec3f bbmax;
     Vec3f bbmin;
     bool inFrame = true;
-
+    Vec44f transformMatrix;
+    Vec44f normalTransformMatrix;
 
 };

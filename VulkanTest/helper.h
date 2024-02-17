@@ -21,6 +21,10 @@ const string FOLDER = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/";
 
 // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
 // https://github.com/MonoGame/MonoGame/blob/develop/MonoGame.Framework/Matrix.cs
+
+/**
+Transformation Conversion 
+*/
 Vec33f quaternionToMatrix(Vec4f q) {
     Vec33f m(Vec3f(0.f));
     float qx = q[0];
@@ -88,22 +92,40 @@ Vec44f quaternionToMatrix4(Vec4f q) {
     return m;
 }
 
-glm::mat4 makeUboMatrix(Vec44f t) {
-
-    float p[16] = { t[0][0], t[0][1], t[0][2], t[0][3],
-            t[1][0], t[1][1], t[1][2], t[1][3],
-            t[2][0], t[2][1], t[2][2], t[2][3],
-            t[3][0], t[3][1], t[3][2], t[3][3]
-    };
-    return glm::make_mat4(p);
-}
-
+ /**
+Matrix Multiplication
+*/
 inline Vec3f matmul333(Vec33f m, Vec3f v) {
     Vec3f r = Vec3f(0.f);
 
     r.x = v.x * m[0].x + v.y * m[0].y + v.z * m[0].z;
     r.y = v.x * m[1].x + v.y * m[1].y + v.z * m[1].z;
     r.z = v.x * m[2].x + v.y * m[2].y + v.z * m[2].z;
+
+    return r;
+}
+
+inline Vec33f matmul3333(Vec33f m1, Vec33f m2) {
+    Vec33f m(Vec3f(0.f));
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            m[i][j] = 0.0f;
+            for (int k = 0; k < 3; ++k) {
+                m[i][j] += m1[i][k] * m2[k][j];
+            }
+        }
+    }
+    return m;
+}
+
+inline Vec4f matmul444(Vec44f m, Vec4f v) {
+
+    Vec4f r = Vec4f(0.f);
+
+    r[0] = v[0] * m[0][0] + v[1] * m[0][1] + v[2] * m[0][2] + v[3] * m[0][3];
+    r[1] = v[0] * m[1][0] + v[1] * m[1][1] + v[2] * m[1][2] + v[3] * m[1][3];
+    r[2] = v[0] * m[2][0] + v[1] * m[2][1] + v[2] * m[2][2] + v[3] * m[2][3];
+    r[3] = v[0] * m[3][0] + v[1] * m[3][1] + v[2] * m[3][2] + v[3] * m[3][3];
 
     return r;
 }
@@ -123,16 +145,18 @@ inline Vec44f matmul4444(Vec44f m1, Vec44f m2) {
     return m;
 }
 
-inline Vec4f matmul444(Vec44f m, Vec4f v) {
 
-    Vec4f r = Vec4f(0.f);
 
-    r[0] = v[0] * m[0][0] + v[1] * m[0][1] + v[2] * m[0][2] + v[3] * m[0][3];
-    r[1] = v[0] * m[1][0] + v[1] * m[1][1] + v[2] * m[1][2] + v[3] * m[1][3];
-    r[2] = v[0] * m[2][0] + v[1] * m[2][1] + v[2] * m[2][2] + v[3] * m[2][3];
-    r[3] = v[0] * m[3][0] + v[1] * m[3][1] + v[2] * m[3][2] + v[3] * m[3][3];
+/**
+Matrix Operation
+*/
 
-    return r;
+Vec33f identity33() {
+    Vec33f t = Vec33f(Vec3f(0.f));
+    for (int i = 0; i < 3; ++i) {
+        t[i][i] = 1.f;
+    }
+    return t;
 }
 
 Vec44f invert44(Vec44f mat) {
@@ -228,6 +252,20 @@ Vec44f transpose44(Vec44f mat) {
     return trans;
 }
 
+Vec44f identity44() {
+    Vec44f t = Vec44f(Vec4f(0.f));
+    for (int i = 0; i < 4; ++i) {
+        t[i][i] = 1.f;
+    }
+    return t;
+}
+
+
+
+/**
+Data type Conversion
+*/
+
 inline vector<int> tovector(string line)
 {
     std::size_t start = line.find('[');
@@ -293,6 +331,19 @@ inline Vec4f tovec4f(string v)
     return Vec4f(f[0], f[1], f[2], f[3]);
 }
 
+float* makeUboMatrix(Vec44f t) {
+
+    float p[16] = { t[0][0], t[0][1], t[0][2], t[0][3],
+            t[1][0], t[1][1], t[1][2], t[1][3],
+            t[2][0], t[2][1], t[2][2], t[2][3],
+            t[3][0], t[3][1], t[3][2], t[3][3]
+    };
+    return p;
+}
+
+/**
+Quick to-string debugging functions
+*/
 inline void view44(Vec44f matrix, string s = "") {
     cout << "\n printing matirx " << s;
     for (int i = 0; i < 4; ++i) {
