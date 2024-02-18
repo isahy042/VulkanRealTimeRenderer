@@ -54,7 +54,7 @@ public:
         if (channel == 1) { // rotate
             s = s / 4;
             for (int i = 0; i < s; i++) {
-                values4.push_back(Vec4f(values[i*4], values[1 + (i * 4)], values[2 + (i * 4)], values[1 + (i * 4)]));
+                values4.push_back(Vec4f(values[i*4], values[1 + (i * 4)], values[2 + (i * 4)], values[3 + (i * 4)]));
             }
         } else if (channel == 0 || channel == 2) { // rotate
             s = s / 3;
@@ -149,6 +149,7 @@ private:
     }
 
     Vec4f linear4(int time) {
+        
         int interval = findInterval(time);
         if (interval == -1) return values4[0];
         else if (interval == intervals - 1) return values4[interval];
@@ -164,10 +165,63 @@ private:
     }
 
     Vec3f slerp3(int time) {
-        return step3(time);
+        int interval = findInterval(time);
+        if (interval == -1) return values3[0];
+        else if (interval == intervals - 1) return values3[interval];
+        float intervalSize = times[interval + 1] - times[interval];
+        float t = static_cast<float>(time) / FPSi;
+
+        t = (t - times[interval]) / intervalSize;
+        Vec4f q1 = Vec4f( values3[interval].x, values3[interval].y, values3[interval].z,0);
+        Vec4f q2 = Vec4f( values3[interval + 1].x, values3[interval + 1].y, values3[interval + 1].z,0);
+
+        // Calculate the angle between the two quaternions
+        float dotProduct = q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3];
+        float theta = acosf(dotProduct);
+
+        // Interpolate
+        float sinTheta = sinf(theta);
+        float coef1 = sinf((1 - t) * theta) / sinTheta;
+        float coef2 = sinf(t * theta) / sinTheta;
+
+        Vec4f r;
+
+        r[0] = coef1 * q1[0] + coef2 * q2[0];
+        r[1] = coef1 * q1[1] + coef2 * q2[1];
+        r[2] = coef1 * q1[2] + coef2 * q2[2];
+        r[3] = coef1 * q1[3] + coef2 * q2[3];
+
+        return normalize(Vec3f(r[0], r[1],r[2]));
     }
     Vec4f slerp4(int time) {
-        return step4(time);
+
+        int interval = findInterval(time);
+        if (interval == -1) return values4[0];
+        else if (interval == intervals - 1) return values4[interval];
+        float intervalSize = times[interval + 1] - times[interval];
+        float t = static_cast<float>(time) / FPSi;
+
+        t = (t - times[interval]) / intervalSize;
+        Vec4f q1 = values4[interval];
+        Vec4f q2 = values4[interval + 1];
+
+        // Calculate the angle between the two quaternions
+        float dotProduct = q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3];
+        float theta = acosf(dotProduct);
+
+        // Interpolate
+        float sinTheta = sinf(theta);
+        float coef1 = sinf((1 - t) * theta) / sinTheta;
+        float coef2 = sinf(t * theta) / sinTheta;
+
+        Vec4f r;
+
+        r[0] = coef1 * q1[0] + coef2 * q2[0];
+        r[1] = coef1 * q1[1] + coef2 * q2[1];
+        r[2] = coef1 * q1[2] + coef2 * q2[2];
+        r[3] = coef1 * q1[3] + coef2 * q2[3];
+
+        return r;
     }
 
     vector<float> values;

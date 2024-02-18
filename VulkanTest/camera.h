@@ -30,7 +30,7 @@ public:
     {
         if (n == "name")
         {
-            name = val.substr(1, val.size()-2);
+            name = val.substr(1, val.size()-3);
         }
         else if (n == "aspect")
         {
@@ -111,7 +111,7 @@ public:
     Vec44f projectionMatrix = Vec44f(Vec4f(0.f));
     Vec44f viewMatrix = Vec44f(Vec4f(0.f));
     Vec44f transformMatrix = Vec44f(Vec4f(0.f));
-
+    string name = "";
     bool testIntersect(Vec3f bbmax, Vec3f bbmin) {
         vector<Vec3f> bbcorners;
         bbcorners.push_back(Vec3f(bbmin.x, bbmin.y, bbmin.z)); // Min corner (x, y, z)
@@ -165,7 +165,7 @@ public:
     }
 
 private:
-    string name = "";
+    
     Vec2f resolution = Vec2f(480, 600);
     float aspect = 1.25f;
     float vfov = 1.f;

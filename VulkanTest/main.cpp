@@ -41,7 +41,6 @@ using namespace std;
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-
 const string currRepo = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/A0/VulkanRepo/"; // for some reason this needs to be added manually :(
 
 const std::vector<const char*> validationLayers = {
@@ -137,7 +136,13 @@ class HelloTriangleApplication {
 
 public:
 	Scene scene = Scene();
+	// arguments initilized by args 
 	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Articulation.s72";
+	string PreferredCamera = "";
+	bool isCulling = false;
+	bool isHeadless = false;
+
+
 	void run() {
 		initWindow();
 		initVulkan();
@@ -222,7 +227,7 @@ private:
 	int totalObjects = 0;
 
 	void loadModel() {
-		scene.parseJson(s72filepath);
+		scene.parseJson(s72filepath, PreferredCamera);
 		// create objects
 		scene.InstantiateObjects();
 		// one vertex buffer for each object!
@@ -246,7 +251,7 @@ private:
 		}
 		totalObjects = scene.objects.size();
 		MAX_FRAMES_IN_FLIGHT = scene.totalFrames;
-		cout << "\n MODEL LOADED " << MAX_FRAMES_IN_FLIGHT <<"\n";
+		cout << "\n MODEL LOADED " << MAX_FRAMES_IN_FLIGHT << " with # objects " << totalObjects << "\n";
 	}
 
 	// picking physical device 
@@ -957,7 +962,8 @@ private:
 
 			vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
-			vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
+			//if (obj == 7) vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
+			if (scene.objects[obj].inFrame || !isCulling) vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 
 		}
 
@@ -1030,6 +1036,10 @@ private:
 			updateUniformBuffer(currentFrame, obj);
 		}
 
+		// cull
+		if (isCulling) {
+			scene.cull();
+		}
 		// manually reset the fence to the unsignaled state
 		// Only reset the fence if we are submitting work
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -1686,8 +1696,65 @@ private:
 
 };
 
-int main() {
+int main(int argc, char* argv[]) {
 	HelloTriangleApplication app;
+
+	// parsing arguments in the main function ..
+	bool validArgs = false;
+	
+	for (int i = 1; i < argc; i++) { 
+		string argument = argv[i];
+		if (argument == "--scene") { // scene name
+			try {
+				app.s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/" + string(argv[i + 1]);
+				cout << app.s72filepath;
+			}
+			catch (const std::exception& e) {
+				std::cerr << e.what() << std::endl;
+				return EXIT_FAILURE;
+			}
+			validArgs = true;
+			i++;
+		}
+		else if (argument == "--camera") {// camera name
+			try {
+				app.PreferredCamera = string(argv[i + 1]);
+			}
+			catch (const std::exception& e) {
+				std::cerr << "invalid argument." << std::endl;
+				return EXIT_FAILURE;
+			}
+			i++;
+		}
+		else if (argument == "--culling") {// culling
+			try {
+				if (string(argv[i + 1]) == "none") app.isCulling = false; // default
+				if (string(argv[i + 1]) == "frustum") app.isCulling = true;
+			}
+			catch (const std::exception& e) {
+				std::cerr << "invalid argument." << std::endl;
+				return EXIT_FAILURE;
+			}
+			i++;
+		}
+		else if (argument == "--headless") {// culling
+			app.isHeadless = true;
+			while (i < (argc - 1) && argv[i + 1][0] != '-') {
+				i++;
+				// add to event here.
+			}
+		}
+		else {
+			std::cerr << "invalid argument." << std::endl;
+			return EXIT_FAILURE;
+		}
+	}
+
+	//if (!validArgs) {
+	//	std::cerr << "invalid argument." << std::endl;
+	//	return EXIT_FAILURE;
+	//}
+
 
 	try {
 		app.run();

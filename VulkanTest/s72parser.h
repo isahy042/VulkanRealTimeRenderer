@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 #include <map>
-
+#include <cstdlib> 
 #include "camera.h"
 #include "mesh.h"
 #include "driver.h"
@@ -86,7 +86,7 @@ public:
 
     Scene() {}
 
-    int parseJson(string filepath)
+    int parseJson(string filepath, string preferredCamera)
     {
         cout << "Parsing the s72 file..";
         string json;
@@ -95,6 +95,7 @@ public:
 
         std::ifstream file(filepath);
         std::string line;
+        int preferredCameraIndex = 0;
 
         if (!file.is_open()) {
             std::cerr << " failed to open s72 file" << std::endl;
@@ -112,7 +113,7 @@ public:
                 if (line.substr(2, 4) == "type")
                 {
                     string objName = line.substr(9, 5);
-                    cout << "finding object with name " << objName << "\n";
+                    // cout << "finding object with name " << objName << "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {
@@ -163,6 +164,11 @@ public:
                         camera.initializeProjection();
                         cameras.push_back(camera);
                         s72map.push_back(make_pair(3, cameras.size() - 1));
+                        //currCam = &cameras[0];
+
+                        if (cameras.back().name == preferredCamera) { 
+                            preferredCameraIndex = cameras.size() - 1;    
+                        }
                     }
                     else if (objName == "DRIVE") // 4 - driver
                     {
@@ -181,6 +187,8 @@ public:
                 }
             }
         }
+
+        currCam = &cameras[2];//preferredCameraIndex];
         return 1;
     }
 
@@ -191,6 +199,9 @@ public:
             throw string("read s72 file before instantiating objects. \n");
             return 0;
        }
+
+       // incase we can't find the preferred camera.
+       //currCam = &cameras[0];
 
        // perform graph traversal, assuming no back edge.
        for (int& root : roots) {
@@ -227,11 +238,11 @@ public:
            totalFrames = std::max(totalFrames, static_cast<int>(ceil(drive.times.back() * FPS)));
        }
        if (drivers.size() == 0) totalFrames = 2;
-       currCam = &cameras[0];
+       
     }
 
     int instantiateNode(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates){
-        cout << "Instantiating node " << root << "\n";
+        //cout << "Instantiating node " << root << "\n";
         Node n = nodes[s72map[root].second];
 
         // push transformations onto vectors
@@ -252,7 +263,7 @@ public:
 
     // construct graph!
     int instantiateMesh(int meshAt, int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
-        cout << "Instantiating Mesh " << meshAt << "\n";
+        //cout << "Instantiating Mesh " << meshAt << "\n";
         // check if mesh
         if (s72map[meshAt].first != 1) {
             printf("wants to instantiate mesh, but given object %d instead. \n", s72map[meshAt].first);
@@ -265,7 +276,7 @@ public:
         o.updateBoundingBox();
         objects.push_back(o);
 
-        cout << "\n setting" << nodeAt << " " << objects.size() - 1;
+        //cout << "\n setting" << nodeAt << " " << objects.size() - 1;
         nodeToObj[nodeAt] = objects.size() - 1;
     }
 
@@ -318,12 +329,12 @@ public:
         else {
             rotates.push_back(n.rotate);
         }
-       // scales.push_back(n.scale);
-       // rotates.push_back(n.rotate);
+        //scales.push_back(n.scale);
+        //rotates.push_back(n.rotate);
         //trans.push_back(n.translate);
 
         if (n.camera > 0) updateCameraTransformMatrix(n.camera, scales, trans, rotates);
-        if (n.mesh > 0) updateMeshTransformMatrix(root, scales, trans, rotates);
+        if (n.mesh > 0) updateMeshTransformMatrix(root, time, scales, trans, rotates);
         if (n.children.size() > 0) {
             for (int& child : n.children) {
                 updateNodeTransformMatrix(child, time, scales, trans, rotates);
@@ -336,9 +347,10 @@ public:
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
     }
 
-    void updateMeshTransformMatrix(int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    void updateMeshTransformMatrix(int nodeAt, int time, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         // get obj index
         int index = nodeToObj[nodeAt];
+
         objects[index].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
         objects[index].updateBoundingBox();
     }
@@ -347,11 +359,13 @@ public:
         for (Object & obj : objects) {
             obj.inFrame = (*currCam).testIntersect(obj.bbmax, obj.bbmin);
         }
+        return 1;
     }
 
     Vec44f generateTransformationMatrix(vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         Vec44f transformation = identity44();
         Vec44f temp;
+        if (scales.size() != trans.size() || rotates.size() != trans.size()) cout << "transformation matrix error.";
         while (!rotates.empty()) {
             // applying its scale, rotation, and translation values (in that order)
             transformation = matmul4444(scaleToMatrix4(scales.back()), transformation);
