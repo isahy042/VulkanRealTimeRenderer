@@ -962,7 +962,6 @@ private:
 
 			vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
-			//if (obj == 7) vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 			if (scene.objects[obj].inFrame || !isCulling) vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 
 		}
@@ -1093,7 +1092,7 @@ private:
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
-	// swap chaion recreation
+	// swap chain recreation
 	void recreateSwapChain() {
 
 		int width = 0, height = 0;
