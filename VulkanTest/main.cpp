@@ -42,7 +42,7 @@ uint32_t WIDTH = 800;
 uint32_t HEIGHT = 600;
 bool adjustDimension = true;
 
-const string currRepo = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/A0/VulkanRepo/"; // for some reason this needs to be added manually :(
+const string currRepo = ""; // for some reason this needs to be added manually :(
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -138,8 +138,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	//string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Articulation.s72";
-	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Duck.s72";
+	string s72filepath = "s72/sg-Support.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -236,7 +235,7 @@ private:
 
 	void loadModel() {
 		float aspect = scene.parseJson(s72filepath, PreferredCamera);
-		if (adjustDimension) {
+		if (adjustDimension && !isHeadless) {
 			float w = static_cast<float>(WIDTH);
 			float h = static_cast<float>(HEIGHT);
 			if ((w * aspect > h) && (w * aspect <= 16000)) {
@@ -274,14 +273,18 @@ private:
 		cout << "\n MODEL LOADED " << totalFrames << " total frames with # objects " << totalObjects << "\n";
 	}
 
+
 	// keyboard call back
 	void executeKeyboardEvents() {
-
-		if (glfwGetKey(window, GLFW_KEY_W)) scene.cameraMovement.z += 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_A)) scene.cameraMovement.x -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.z -= 0.05f;
+		if (glfwGetKey(window, GLFW_KEY_A)) scene.cameraMovement.x -= 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_D)) scene.cameraMovement.x += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_W)) scene.cameraMovement.y += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.y -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.05f;
+
 		else if (glfwGetKey(window, GLFW_KEY_R)) scene.cameraMovement = Vec3f(0.f);
+
 		else if (glfwGetKey(window, GLFW_KEY_C) && keyboardInput == 0) {  
 			scene.updateFrustum = !scene.updateFrustum; 
 			cout << "\n nolonger upating frustum." << scene.updateFrustum; 
@@ -1183,7 +1186,7 @@ private:
 			void* mappedMemory;
 			vkMapMemory(device, stagingBufferMemory, 0, WIDTH * HEIGHT * 3, 0, &mappedMemory);
 
-			ofstream file(FOLDER+filename, std::ios::out | std::ios::binary | std::ios::trunc);
+			ofstream file(filename, std::ios::out | std::ios::binary | std::ios::trunc);
 			if (!file.is_open()) {
 				std::cerr << "Failed to open file: " << filename << std::endl;
 				return;
@@ -1195,8 +1198,9 @@ private:
 			// Access and print buffer contents (assuming buffer contains uint32_t data)
 			unsigned char* data = reinterpret_cast<unsigned char*>(mappedMemory);
 			for (size_t i = 0; i < WIDTH * HEIGHT * 4; ++i) {
-				if (i % 4 != 0) file << data[i] << std::endl;
+				if (i % 4 != 0) file << data[i];
 			}
+
 			file.close();
 
 			// Unmap buffer memory
@@ -1893,7 +1897,7 @@ int main(int argc, char* argv[]) {
 		string argument = argv[i];
 		if (argument == "--scene") { // scene name
 			try {
-				app.s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/" + string(argv[i + 1]);
+				app.s72filepath = "s72/" + string(argv[i + 1]);
 				cout << app.s72filepath;
 			}
 			catch (const std::exception& e) {

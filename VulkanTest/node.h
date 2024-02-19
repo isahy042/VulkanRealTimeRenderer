@@ -28,6 +28,9 @@ public:
     int rotateDriver = -1;
     int scaleDriver = -1;
 
+    Vec3f bbmax = Vec3f(-INFINITY);
+    Vec3f bbmin = Vec3f(INFINITY);
+
     void setValue(string n, string val)
     {
         if (n == "translation")

@@ -18,17 +18,6 @@
 
 using namespace std;
 
-/**
-To do list (Finish by Wed.):
-Json parser (load)
-Loading and viewing
-
-// for later
-Vector Library (3 hr)
-Report (3 hr)
-*/
-
-
 
 inline string getName(string line)
 {
@@ -47,27 +36,6 @@ inline string getValue(string line)
     return line.substr(start + 1, end - start + 1);
 }
 
-//inline float extractFloat(string line)
-//{
-//    std::size_t start = line.find(':');
-//    std::size_t end = line.find(',', start + 1);
-//    if (start == string::npos || end == string::npos)
-//    {
-//        // error.
-//    }
-//    return std::stof(line.substr(start + 1, end - start - 2));
-//}
-//
-//inline string extractstring(string line)
-//{
-//    std::size_t start = line.find(':');
-//    std::size_t end = line.find('"', start + 2);
-//    if (start == string::npos || end == string::npos)
-//    {
-//        // error.
-//    }
-//    return line.substr(start + 2, end - start - 3);
-//}
 class Scene {
 public:
     vector<pair<int, int>> s72map; // (type, index in type vector)
@@ -339,12 +307,34 @@ public:
         //trans.push_back(n.translate);
 
         if (n.camera > 0) updateCameraTransformMatrix(n.camera, scales, trans, rotates);
-        if (n.mesh > 0) updateMeshTransformMatrix(root, time, scales, trans, rotates);
+        if (n.mesh > 0) { 
+            updateMeshTransformMatrix(root, time, scales, trans, rotates); 
+
+            nodes[s72map[root].second].bbmin.x = min(nodes[s72map[root].second].bbmin.x, objects[nodeToObj[root]].bbmin.x);
+            nodes[s72map[root].second].bbmin.y = min(nodes[s72map[root].second].bbmin.y, objects[nodeToObj[root]].bbmin.y);
+            nodes[s72map[root].second].bbmin.z = min(nodes[s72map[root].second].bbmin.z, objects[nodeToObj[root]].bbmin.z);
+
+            nodes[s72map[root].second].bbmax.x = max(nodes[s72map[root].second].bbmax.x, objects[nodeToObj[root]].bbmax.x);
+            nodes[s72map[root].second].bbmax.y = max(nodes[s72map[root].second].bbmax.y, objects[nodeToObj[root]].bbmax.y);
+            nodes[s72map[root].second].bbmax.z = max(nodes[s72map[root].second].bbmax.z, objects[nodeToObj[root]].bbmax.z);
+           
+        
+        }
         if (n.children.size() > 0) {
             for (int& child : n.children) {
                 updateNodeTransformMatrix(child, time, scales, trans, rotates);
+
+                nodes[s72map[root].second].bbmin.x = min(nodes[s72map[root].second].bbmin.x, nodes[s72map[child].second].bbmin.x);
+                nodes[s72map[root].second].bbmin.y = min(nodes[s72map[root].second].bbmin.y, nodes[s72map[child].second].bbmin.y);
+                nodes[s72map[root].second].bbmin.z = min(nodes[s72map[root].second].bbmin.z, nodes[s72map[child].second].bbmin.z);
+
+                nodes[s72map[root].second].bbmax.x = max(nodes[s72map[root].second].bbmax.x, nodes[s72map[child].second].bbmax.x);
+                nodes[s72map[root].second].bbmax.y = max(nodes[s72map[root].second].bbmax.y, nodes[s72map[child].second].bbmax.y);
+                nodes[s72map[root].second].bbmax.z = max(nodes[s72map[root].second].bbmax.z, nodes[s72map[child].second].bbmax.z);
             }
         }
+
+        
     }
 
     void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
@@ -363,26 +353,29 @@ public:
     }
     
     int cull() {
-        for (Object & obj : objects) {
-
-            obj.inFrame = (*currCam).testIntersect(obj.bbmax, obj.bbmin);
-            //cout << "\n bbmin" << obj.bbmin;
-            //cout << "\n bbmax" << obj.bbmax;
-            //cout << "\n frustumnear" << (*currCam).nearfrustum[0];
-            //cout << "\n frustumnear" << (*currCam).nearfrustum[1];
-            //cout << "\n frustumnear" << (*currCam).nearfrustum[2];
-            //cout << "\n frustumnear" << (*currCam).nearfrustum[3];
-
-            //cout << "\n frustumfar" << (*currCam).farfrustum[0];
-            //cout << "\n frustumfar" << (*currCam).farfrustum[1];
-            //cout << "\n frustumfar" << (*currCam).farfrustum[2];
-            //cout << "\n frustumfar" << (*currCam).farfrustum[3];
-
-            //cout << "\n result: " << obj.inFrame;
-
-
+        for (int& root : roots) {
+            cullNode(root, true);
         }
+
         return 1;
+    }
+
+    void cullNode(int at, bool intersect) {
+        //cout << "updating node. \n";
+        Node n = nodes[s72map[at].second];
+        if (intersect) intersect = (*currCam).testIntersect(n.bbmax, n.bbmin);
+        if (n.mesh > 0) {
+            int index = nodeToObj[at];
+            if (intersect) objects[index].inFrame = (*currCam).testIntersect(objects[index].bbmax, objects[index].bbmin);
+            else objects[index].inFrame = false;
+        }
+        if (n.children.size() > 0) {
+            for (int& child : n.children) {
+                cullNode(child, intersect);
+            }
+        }
+
+       
     }
 
     Vec44f generateTransformationMatrix(vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {

@@ -16,7 +16,7 @@
 
 using namespace std;
 
-const string FOLDER = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/";
+const string FOLDER = "";
 int FPS = 30;
 float FPSi = 30.f;
 
