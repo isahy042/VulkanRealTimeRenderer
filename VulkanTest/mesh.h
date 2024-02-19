@@ -173,6 +173,15 @@ public:
             }
         }
 
+        bbcorners.push_back(Vec3f(bbmin.x, bbmin.y, bbmin.z)); // Min corner (x, y, z)
+        bbcorners.push_back(Vec3f(bbmin.x, bbmin.y, bbmax.z));
+        bbcorners.push_back(Vec3f(bbmin.x, bbmax.y, bbmin.z));
+        bbcorners.push_back(Vec3f(bbmin.x, bbmax.y, bbmax.z));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmin.y, bbmin.z));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmin.y, bbmax.z));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmin.z));
+        bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmax.z));
+
     }
 
     string name = "";
@@ -186,6 +195,8 @@ public:
 
     Vec3f bbmax = Vec3f(-INFINITY);
     Vec3f bbmin = Vec3f(INFINITY);
+    // get all 8 corners 
+    vector<Vec3f> bbcorners;
 
 private:
         bool inputIndices = false;

@@ -76,6 +76,9 @@ public:
 
     vector<Camera> cameras;
     Camera *currCam;
+    Vec3f cameraMovement = Vec3f(0.f);
+    bool updateFrustum = true;
+
     vector<Node> nodes;
     vector<Mesh> meshes;
     vector<Driver> drivers;
@@ -86,7 +89,7 @@ public:
 
     Scene() {}
 
-    int parseJson(string filepath, string preferredCamera)
+    float parseJson(string filepath, string preferredCamera)
     {
         cout << "Parsing the s72 file..";
         string json;
@@ -188,8 +191,8 @@ public:
             }
         }
 
-        currCam = &cameras[2];//preferredCameraIndex];
-        return 1;
+        currCam = &cameras[preferredCameraIndex]; //&cameras[2];//
+        return cameras[preferredCameraIndex].aspect;
     }
 
     // first traversal of graph - constructing it
@@ -239,6 +242,7 @@ public:
        }
        if (drivers.size() == 0) totalFrames = 2;
        
+
     }
 
     int instantiateNode(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates){
@@ -287,8 +291,9 @@ public:
             return 0;
         }
         // TODO: transform camera.
-        cameras[s72map[at].second].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
-        cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
+        Vec44f m = generateTransformationMatrix(scales, trans, rotates);
+        cameras[s72map[at].second].transformMatrix = m;
+        cameras[s72map[at].second].viewMatrix = transpose44(invert44(m));
 
         return 1;
 
@@ -343,21 +348,39 @@ public:
     }
 
     void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
-        cameras[s72map[at].second].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        Vec44f m = generateTransformationMatrix(scales, trans, rotates);
+
+        cameras[s72map[at].second].transformMatrix = matmul4444(transToMatrix4(cameraMovement), m);
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
+        if (updateFrustum) cameras[s72map[at].second].applyTrasformation();
     }
 
     void updateMeshTransformMatrix(int nodeAt, int time, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         // get obj index
         int index = nodeToObj[nodeAt];
-
         objects[index].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
         objects[index].updateBoundingBox();
     }
     
     int cull() {
         for (Object & obj : objects) {
+
             obj.inFrame = (*currCam).testIntersect(obj.bbmax, obj.bbmin);
+            //cout << "\n bbmin" << obj.bbmin;
+            //cout << "\n bbmax" << obj.bbmax;
+            //cout << "\n frustumnear" << (*currCam).nearfrustum[0];
+            //cout << "\n frustumnear" << (*currCam).nearfrustum[1];
+            //cout << "\n frustumnear" << (*currCam).nearfrustum[2];
+            //cout << "\n frustumnear" << (*currCam).nearfrustum[3];
+
+            //cout << "\n frustumfar" << (*currCam).farfrustum[0];
+            //cout << "\n frustumfar" << (*currCam).farfrustum[1];
+            //cout << "\n frustumfar" << (*currCam).farfrustum[2];
+            //cout << "\n frustumfar" << (*currCam).farfrustum[3];
+
+            //cout << "\n result: " << obj.inFrame;
+
+
         }
         return 1;
     }

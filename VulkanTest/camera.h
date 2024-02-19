@@ -16,13 +16,33 @@ using namespace std;
 class Camera
 {
 public:
+    Vec44f projectionMatrix = Vec44f(Vec4f(0.f));
+    Vec44f viewMatrix = Vec44f(Vec4f(0.f));
+    Vec44f transformMatrix = Vec44f(Vec4f(0.f));
+    string name = "";
+
+    vector<Vec3f> initnearfrustum;
+    vector<Vec3f> initfarfrustum;
+    vector<Vec3f> initnormals;
+
+    vector<Vec3f> nearfrustum;
+    vector<Vec3f> farfrustum;
+    vector<Vec3f> normals;
+
+    float aspect = 1.25f;
+
     Camera() {
         for (int i = 0; i < 8; i++) { 
             nearfrustum.push_back(Vec3f(0.f));
             farfrustum.push_back(Vec3f(0.f));
+
+            initnearfrustum.push_back(Vec3f(0.f));
+            initfarfrustum.push_back(Vec3f(0.f));
         }
         for (int i = 0; i < 6; i++) {
             normals.push_back(Vec3f(0.f));
+            initnormals.push_back(Vec3f(0.f));
+
         }
     }
 
@@ -74,44 +94,42 @@ public:
         float halfWidthNear = halfHeightNear * aspect;
 
         // Coordinates of the four corners of the viewing plane at the near distance
-        nearfrustum[0] = Vec3f(-halfWidthNear, halfHeightNear, -near); // clockwise
-        nearfrustum[1] = Vec3f(halfWidthNear, halfHeightNear, -near);
-        nearfrustum[2] = Vec3f(halfWidthNear, -halfHeightNear, -near);
-        nearfrustum[3] = Vec3f(-halfWidthNear, -halfHeightNear, -near);
+        initnearfrustum[0] = Vec3f(-halfWidthNear, halfHeightNear, -near); // clockwise
+        initnearfrustum[1] = Vec3f(halfWidthNear, halfHeightNear, -near);
+        initnearfrustum[2] = Vec3f(halfWidthNear, -halfHeightNear, -near);
+        initnearfrustum[3] = Vec3f(-halfWidthNear, -halfHeightNear, -near);
 
         float halfHeightFar = far * tan(vfov / 2.0f);
         float halfWidthFar = halfHeightFar * aspect;
 
         // Coordinates of the four corners of the viewing plane at the near distance
-        farfrustum[0] = Vec3f(-halfWidthFar, halfHeightFar, -far);
-        farfrustum[1] = Vec3f(halfWidthFar, halfHeightFar, -far);
-        farfrustum[2] = Vec3f(halfWidthFar, -halfHeightFar, -far);
-        farfrustum[3] = Vec3f(-halfWidthFar, -halfHeightFar, -far);
-    }
+        initfarfrustum[0] = Vec3f(-halfWidthFar, halfHeightFar, -far);
+        initfarfrustum[1] = Vec3f(halfWidthFar, halfHeightFar, -far);
+        initfarfrustum[2] = Vec3f(halfWidthFar, -halfHeightFar, -far);
+        initfarfrustum[3] = Vec3f(-halfWidthFar, -halfHeightFar, -far);
 
+    }
+    
     void updateNormal() {
-        normals[0] = cross((farfrustum[0] - farfrustum[1]),(farfrustum[2] - farfrustum[1])); // far plane
-        normals[1] = cross((nearfrustum[2] - nearfrustum[1]), (nearfrustum[0] - nearfrustum[1])); // near plane
-        normals[2] = cross((nearfrustum[0] - nearfrustum[3]),(farfrustum[1] - nearfrustum[3])); // top plane
-        normals[3] = cross((farfrustum[3] - nearfrustum[3]), (nearfrustum[0] - nearfrustum[3])); // left plane
-        normals[4] = cross((farfrustum[3] - farfrustum[2]), (nearfrustum[2] - farfrustum[2])); // bottom plane
-        normals[5] = cross((farfrustum[1] - nearfrustum[3]), (nearfrustum[2] - nearfrustum[3])); // right plane
+        normals[0] = normalize(cross((farfrustum[0] - farfrustum[1]),(farfrustum[2] - farfrustum[1]))); // far plane
+        normals[1] = normalize(cross((nearfrustum[2] - nearfrustum[1]), (nearfrustum[0] - nearfrustum[1]))); // near plane
+        normals[2] = normalize(cross((nearfrustum[0] - nearfrustum[1]),(farfrustum[1] - nearfrustum[1]))); // top plane
+        normals[3] = normalize(cross((farfrustum[3] - nearfrustum[3]), (nearfrustum[0] - nearfrustum[3]))); // left plane
+        normals[4] = normalize(cross((farfrustum[3] - farfrustum[2]), (nearfrustum[2] - farfrustum[2]))); // bottom plane
+        normals[5] = normalize(cross((farfrustum[1] - nearfrustum[1]), (nearfrustum[2] - nearfrustum[1]))); // right plane
     }
     
     void applyTrasformation() {
         // update frustum
         for (int f = 0; f < 4; f++) {
-            farfrustum[f] = transformPos(transformMatrix, farfrustum[f]);
-            nearfrustum[f] = transformPos(transformMatrix, nearfrustum[f]);
+            farfrustum[f] = transformPos(transformMatrix, initfarfrustum[f]);
+            nearfrustum[f] = transformPos(transformMatrix, initnearfrustum[f]);
         }
         // update normal
         updateNormal();
     }
 
-    Vec44f projectionMatrix = Vec44f(Vec4f(0.f));
-    Vec44f viewMatrix = Vec44f(Vec4f(0.f));
-    Vec44f transformMatrix = Vec44f(Vec4f(0.f));
-    string name = "";
+
     bool testIntersect(Vec3f bbmax, Vec3f bbmin) {
         vector<Vec3f> bbcorners;
         bbcorners.push_back(Vec3f(bbmin.x, bbmin.y, bbmin.z)); // Min corner (x, y, z)
@@ -124,8 +142,10 @@ public:
         bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmax.z ));
 
         // either one of the bb corner is inside the furstum or one of the frustum corner is in the bb.
+        
         // bb corner inside frustum
         for (int corner = 0; corner < 8; corner++) {
+
             if ((dot(bbcorners[corner] - farfrustum[0], normals[0]) < 0)) {
                 continue;
             }
@@ -160,14 +180,47 @@ public:
                 return true;
             }
         }
+
+        // intersect but no corners inside each other :(
+        // test if either 4 lines of the frustum intersects any plane of the bb.
+        for (int l = 0; l < 4; l++) {
+            Vec3f line = normalize(farfrustum[l] - nearfrustum[l]);
+
+            float mint = (bbmin.x - nearfrustum[l].x) / line.x;
+            float maxt = (bbmax.x - nearfrustum[l].x) / line.x;
+
+            if ((((line.y * mint) + nearfrustum[l].y) >= bbmin.y) && (((line.y * mint) + nearfrustum[l].y) <= bbmax.y) && (mint >= 0) &&
+                (((line.z * mint) + nearfrustum[l].z) >= bbmin.z) && (((line.z * mint) + nearfrustum[l].z) <= bbmax.z)) return true;
+
+            if ((((line.y * maxt) + nearfrustum[l].y) >= bbmin.y) && (((line.y * maxt) + nearfrustum[l].y) <= bbmax.y) && (maxt >= 0) &&
+                (((line.z * maxt) + nearfrustum[l].z) >= bbmin.z) && (((line.z * maxt) + nearfrustum[l].z) <= bbmax.z)) return true;
+
+            mint = (bbmin.y - nearfrustum[l].y) / line.y;
+            maxt = (bbmax.y - nearfrustum[l].y) / line.y;
+
+            if ((((line.x * mint) + nearfrustum[l].x) >= bbmin.x) && (((line.x * mint) + nearfrustum[l].x) <= bbmax.x) && (mint >= 0) &&
+                (((line.z * mint) + nearfrustum[l].z) >= bbmin.z) && (((line.z * mint) + nearfrustum[l].z) <= bbmax.z)) return true;
+
+            if ((((line.x * maxt) + nearfrustum[l].x) >= bbmin.x) && (((line.x * maxt) + nearfrustum[l].x) <= bbmax.x) && (maxt >= 0) &&
+                (((line.z * maxt) + nearfrustum[l].z) >= bbmin.z) && (((line.z * maxt) + nearfrustum[l].z) <= bbmax.z)) return true;
+
+            mint = (bbmin.z - nearfrustum[l].z) / line.z;
+            maxt = (bbmax.z - nearfrustum[l].z) / line.z;
+
+            if ((((line.x * mint) + nearfrustum[l].x) >= bbmin.x) && (((line.x * mint) + nearfrustum[l].x) <= bbmax.x) && (mint >= 0) &&
+                (((line.y * mint) + nearfrustum[l].y) >= bbmin.y) && (((line.y * mint) + nearfrustum[l].y) <= bbmax.y)) return true;
+
+            if ((((line.x * maxt) + nearfrustum[l].x) >= bbmin.x) && (((line.x * maxt) + nearfrustum[l].x) <= bbmax.x) && (maxt >= 0) &&
+                (((line.y * maxt) + nearfrustum[l].y) >= bbmin.y) && (((line.y * maxt) + nearfrustum[l].y) <= bbmax.y)) return true;
+
+            }
+
+
         // otherwise, false
         return false;
     }
 
 private:
-    
-    Vec2f resolution = Vec2f(480, 600);
-    float aspect = 1.25f;
     float vfov = 1.f;
     float near = 0.1f;
     float far = 1000.f; 
@@ -175,9 +228,7 @@ private:
     Vec2f size = Vec2f(480, 600);
     Vec3f initTrans = Vec3f(0, 0, 0);
     Vec4f initRot = Vec4f(0, 0, 0, 0);
-    vector<Vec3f> nearfrustum;
-    vector<Vec3f> farfrustum;
-    vector<Vec3f> normals;
+
 
 
 };

@@ -17,8 +17,8 @@
 using namespace std;
 
 const string FOLDER = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/";
-const int FPS = 60;
-const float FPSi = 60.f;
+int FPS = 30;
+float FPSi = 30.f;
 
 
 // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm

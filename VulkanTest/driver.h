@@ -103,7 +103,6 @@ public:
 
     }
 
-
     int node = -1;
     int channel = -1; // translate, rotate, scale
 
@@ -142,9 +141,8 @@ private:
         float intervalSize = times[interval + 1] - times[interval];
 
         float t = static_cast<float>(time) / FPSi;
-        float weight1 = (t - times[interval]) / intervalSize;
-        float weight2 = 1 - weight1;
-
+        float weight2 = (t - times[interval]) / intervalSize;
+        float weight1 = 1 - weight2;
         return (weight1 * values3[interval]) + (weight2 * values3[interval + 1]);
     }
 
@@ -158,10 +156,10 @@ private:
         float intervalSize = times[interval + 1] - times[interval];
 
         float t = static_cast<float>(time) / FPSi;
-        float weight1 = (t - times[interval]) / intervalSize;
-        float weight2 = 1 - weight1;
+        float weight2 = (t - times[interval]) / intervalSize;
+        float weight1 = 1 - weight2;
 
-        return (weight1 * values4[interval]) + (weight2 * values4[interval + 1]);
+        return normalize((weight1 * values4[interval]) + (weight2 * values4[interval + 1]));
     }
 
     Vec3f slerp3(int time) {

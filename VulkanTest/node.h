@@ -71,8 +71,18 @@ public:
     }
 
     void updateBoundingBox() {
-        bbmin = transformPos(transformMatrix, bbmin);
-        bbmax = transformPos(transformMatrix, bbmax);
+        Vec3f temp = transformPos(transformMatrix, mesh.bbcorners[0]);
+        bbmin = temp;
+        bbmax = temp;
+
+        for (int c = 1; c < 8; c++) {
+            temp = transformPos(transformMatrix, mesh.bbcorners[c]);
+            for (int i = 0; i < 3; i++) {
+                bbmin[i] = min(bbmin[i], temp[i]);
+                bbmax[i] = max(bbmax[i], temp[i]);
+            }
+        }
+       
     }
 
     Mesh mesh;

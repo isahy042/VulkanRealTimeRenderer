@@ -38,8 +38,9 @@
 // using directive
 using namespace std;
 
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
+uint32_t WIDTH = 800;
+uint32_t HEIGHT = 600;
+bool adjustDimension = true;
 
 const string currRepo = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/A0/VulkanRepo/"; // for some reason this needs to be added manually :(
 
@@ -59,7 +60,7 @@ const bool enableValidationLayers = true;
 #endif
 
 // defines how many frames should be processed concurrently
-int MAX_FRAMES_IN_FLIGHT = 2;
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 // structs
 
@@ -137,16 +138,19 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Articulation.s72";
-	string PreferredCamera = "";
-	bool isCulling = false;
-	bool isHeadless = false;
+	//string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Articulation.s72";
+	string s72filepath = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/sg-Duck.s72";
 
+	string PreferredCamera = "";
+	bool isCulling = true;
+	bool isHeadless = false;
+	string eventsFile = "example.events";
 
 	void run() {
 		initWindow();
 		initVulkan();
-		mainLoop();
+		if (isHeadless) mainLoopHeadless();
+		else mainLoop();
 		cleanup();
 	}
 
@@ -161,7 +165,7 @@ private:
 
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
-
+	
 	VkSwapchainKHR swapChain;
 	std::vector<VkImage> swapChainImages;
 	VkFormat swapChainImageFormat;
@@ -225,9 +229,25 @@ private:
 	vector<vector<uint32_t>> indices;
 
 	int totalObjects = 0;
+	int keyboardInput = 0;
+
+	int totalFrames = 2;
+	int currentFrameIndex = 0;
 
 	void loadModel() {
-		scene.parseJson(s72filepath, PreferredCamera);
+		float aspect = scene.parseJson(s72filepath, PreferredCamera);
+		if (adjustDimension) {
+			float w = static_cast<float>(WIDTH);
+			float h = static_cast<float>(HEIGHT);
+			if ((w * aspect > h) && (w * aspect <= 16000)) {
+				h = floor(w * aspect);
+				HEIGHT = static_cast<uint32_t>(h);
+			}
+			else {
+				w = floor(h / aspect);
+				WIDTH = static_cast<uint32_t>(w);
+			}
+		}
 		// create objects
 		scene.InstantiateObjects();
 		// one vertex buffer for each object!
@@ -250,8 +270,25 @@ private:
 
 		}
 		totalObjects = scene.objects.size();
-		MAX_FRAMES_IN_FLIGHT = scene.totalFrames;
-		cout << "\n MODEL LOADED " << MAX_FRAMES_IN_FLIGHT << " with # objects " << totalObjects << "\n";
+		totalFrames = scene.totalFrames;
+		cout << "\n MODEL LOADED " << totalFrames << " total frames with # objects " << totalObjects << "\n";
+	}
+
+	// keyboard call back
+	void executeKeyboardEvents() {
+
+		if (glfwGetKey(window, GLFW_KEY_W)) scene.cameraMovement.z += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_A)) scene.cameraMovement.x -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.z -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_D)) scene.cameraMovement.x += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_R)) scene.cameraMovement = Vec3f(0.f);
+		else if (glfwGetKey(window, GLFW_KEY_C) && keyboardInput == 0) {  
+			scene.updateFrustum = !scene.updateFrustum; 
+			cout << "\n nolonger upating frustum." << scene.updateFrustum; 
+			keyboardInput = 1;
+		} // one press
+		else if (!glfwGetKey(window, GLFW_KEY_C)){ keyboardInput = 0; // no key is pressed now. 
+		}
 	}
 
 	// picking physical device 
@@ -559,7 +596,7 @@ private:
 
 			actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 			actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-
+			
 			return actualExtent;
 		}
 	}
@@ -572,21 +609,43 @@ private:
 		VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
 		VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
+
+		//cout << "\nactual extent" << extent.width << extent.height;
+
 		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
 		if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
 			imageCount = swapChainSupport.capabilities.maxImageCount;
 		}
-
+		
 		VkSwapchainCreateInfoKHR createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		createInfo.surface = surface;
+
+		
+		if ((HEIGHT > extent.height || WIDTH > extent.width) && (isHeadless)){
+			extent.height = HEIGHT;
+			extent.width = WIDTH;
+		}
+		// if extent is too big, scale it.
+		// TODO: VUID-VkSwapchainCreateInfoKHR-pNext-07781
+		VkSwapchainPresentScalingCreateInfoEXT scalingCreateInfo{};
+
+		scalingCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT;
+		//scalingCreateInfo.pNext = &createInfo;
+		scalingCreateInfo.scalingBehavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_EXT; 
+		scalingCreateInfo.presentGravityX = 4;
+		scalingCreateInfo.presentGravityY = 4;
+
+		createInfo.pNext = &scalingCreateInfo;
+		//cout << "\npnext set! " << scalingCreateInfo.scalingBehavior;
+
 
 		createInfo.minImageCount = imageCount;
 		createInfo.imageFormat = surfaceFormat.format;
 		createInfo.imageColorSpace = surfaceFormat.colorSpace;
 		createInfo.imageExtent = extent;
 		createInfo.imageArrayLayers = 1; // unless stereoscopic 3D application
-		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; //VK_IMAGE_USAGE_TRANSFER_DST_BIT - use a memory operation to transfer the rendered image to a swap chain image
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; //VK_IMAGE_USAGE_TRANSFER_DST_BIT - use a memory operation to transfer the rendered image to a swap chain image
 
 		QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 		uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
@@ -629,6 +688,7 @@ private:
 
 		for (uint32_t i = 0; i < swapChainImages.size(); i++) {
 			swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+
 		}
 
 	}
@@ -966,7 +1026,6 @@ private:
 
 		}
 
-
 		vkCmdEndRenderPass(commandBuffer);
 
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1014,7 +1073,7 @@ private:
 	}
 
 	void drawFrame() {
-
+		
 		// wait for prev frame
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -1030,10 +1089,11 @@ private:
 		}
 
 		// doing this for multiple vertex buffers!
-		scene.updateSceneTransformMatrix(currentFrame);
+		scene.updateSceneTransformMatrix(currentFrameIndex);
 		for (int obj = 0; obj < totalObjects; obj++) {
 			updateUniformBuffer(currentFrame, obj);
 		}
+		//cout << "\ncurrently rendering frame " << currentFrame;
 
 		// cull
 		if (isCulling) {
@@ -1088,9 +1148,70 @@ private:
 		else if (result != VK_SUCCESS) {
 			throw std::runtime_error("failed to present swap chain image!");
 		}
-
+		currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
+
+	void saveImg(string filename) {
+		VkDeviceSize imageSize = WIDTH * HEIGHT * 4;
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+			VkBufferImageCopy region{};
+			region.bufferOffset = 0;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = 0;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = 1;
+			region.imageOffset = { 0, 0, 0 };
+			region.imageExtent = {
+				WIDTH,
+				HEIGHT,
+				1
+			};
+
+			vkCmdCopyImageToBuffer(commandBuffer, swapChainImages[currentFrame], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
+			endSingleTimeCommands(commandBuffer);
+
+			void* mappedMemory;
+			vkMapMemory(device, stagingBufferMemory, 0, WIDTH * HEIGHT * 3, 0, &mappedMemory);
+
+			ofstream file(FOLDER+filename, std::ios::out | std::ios::binary | std::ios::trunc);
+			if (!file.is_open()) {
+				std::cerr << "Failed to open file: " << filename << std::endl;
+				return;
+			}
+
+			// Write PPM header
+			file << "P6\n" << WIDTH << " " << HEIGHT << "\n255\n";
+
+			// Access and print buffer contents (assuming buffer contains uint32_t data)
+			unsigned char* data = reinterpret_cast<unsigned char*>(mappedMemory);
+			for (size_t i = 0; i < WIDTH * HEIGHT * 4; ++i) {
+				if (i % 4 != 0) file << data[i] << std::endl;
+			}
+			file.close();
+
+			// Unmap buffer memory
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			// Destroy the buffer
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+
+			// Free the memory
+			vkFreeMemory(device, stagingBufferMemory , nullptr);
+
+
+	}
+
+
 
 	// swap chain recreation
 	void recreateSwapChain() {
@@ -1584,10 +1705,13 @@ private:
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		if (isHeadless) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+		//glfwSetKeyCallback(window, key_callback);
 	}
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
@@ -1639,7 +1763,9 @@ private:
 	}
 
 	void mainLoop() {
+
 		while (!glfwWindowShouldClose(window)) {
+			executeKeyboardEvents();		
 			glfwPollEvents();
 			drawFrame();
 		}
@@ -1647,8 +1773,67 @@ private:
 		vkDeviceWaitIdle(device);
 	}
 
-	void cleanup() {
+	void mainLoopHeadless() {
 
+		// Open the file
+		ifstream file(FOLDER + eventsFile);
+
+		// Check if the file is opened successfully
+		if (!file.is_open()) {
+			std::cerr << "\nFailed to open the events file.\n" << std::endl;
+			return;
+		}
+
+		string line;
+		float frame = 0;
+		int p1 = 0;
+		int p2 = 0;
+		string action = "";
+		try {
+			while (std::getline(file, line)) {
+				//std::cout << line << std::endl;
+				p1 = line.find(' ');
+				frame = stof(line.substr(0, p1));
+				action = line.substr(p1+1, 4);
+				if (action == "MARK") cout << "\n" << line.substr(p1+5);
+				else if (action == "AVAI") {
+					glfwPollEvents();
+					currentFrameIndex = static_cast<uint32_t>(static_cast<int>(floor((frame / 1000000.f) * FPSi)) % totalFrames);
+					drawFrame();
+				}
+				else if (action == "SAVE") {
+					p1 += 6;
+					string fileName = line.substr(p1);
+					saveImg(fileName);
+				}
+				else if (action == "PLAY") {
+					p1 += 6;
+					p2 = line.find(' ', p1);
+					frame = stof(line.substr(p1, p2-p1));
+					if (stoi(line.substr(p2 + 1, 1)) == 0) {
+						FPS = 0;
+						FPSi = 0.f;
+					}else if(stoi(line.substr(p2 + 1, 1)) == 1){
+						FPS = 50;
+						FPSi = 50.f;
+					}
+					else {
+						cout << "\nInvalid PLAY mode encountered in events file.\n";
+					}
+
+				}
+			}
+		}
+		catch (const std::exception& e) {
+			std::cerr << "\nError occured while executing the events file.\n"<< std::endl;
+		}
+		// Close the file
+		file.close();
+		vkDeviceWaitIdle(device);
+
+	}
+
+	void cleanup() {
 		cleanupSwapChain();
 
 		vkDestroySampler(device, textureSampler, nullptr);
@@ -1670,6 +1855,15 @@ private:
 		for (size_t obj = 0; obj < totalObjects; obj++) {
 			vkDestroyBuffer(device, vertexBuffer[obj], nullptr);
 			vkFreeMemory(device, vertexBufferMemory[obj], nullptr);
+	 
+			vkDestroyBuffer(device, indexBuffer[obj], nullptr);
+			vkFreeMemory(device, indexBufferMemory[obj], nullptr);
+		}
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+			vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+			vkDestroyFence(device, inFlightFences[i], nullptr);
 		}
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
@@ -1684,12 +1878,6 @@ private:
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkDestroyInstance(instance, nullptr);
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
-			vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
-			vkDestroyFence(device, inFlightFences[i], nullptr);
-		}
-
 		glfwTerminate();
 	}
 
@@ -1699,7 +1887,7 @@ int main(int argc, char* argv[]) {
 	HelloTriangleApplication app;
 
 	// parsing arguments in the main function ..
-	bool validArgs = false;
+	bool validArgs = true;//false;
 	
 	for (int i = 1; i < argc; i++) { 
 		string argument = argv[i];
@@ -1738,10 +1926,20 @@ int main(int argc, char* argv[]) {
 		}
 		else if (argument == "--headless") {// culling
 			app.isHeadless = true;
-			while (i < (argc - 1) && argv[i + 1][0] != '-') {
-				i++;
-				// add to event here.
+			app.eventsFile = string(argv[i + 1]);
+			i++;
+		}
+		else if (argument == "--drawing-size") {// drawing size
+			try {
+				adjustDimension = false;
+				HEIGHT = min(16000, stoi((string(argv[i + 2]))));
+				WIDTH = min(16000,stoi((string(argv[i + 1]))));
 			}
+			catch (const std::exception& e) {
+				std::cerr << "invalid argument." << std::endl;
+				return EXIT_FAILURE;
+			}
+			i += 2;
 		}
 		else {
 			std::cerr << "invalid argument." << std::endl;
@@ -1749,11 +1947,10 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	//if (!validArgs) {
-	//	std::cerr << "invalid argument." << std::endl;
-	//	return EXIT_FAILURE;
-	//}
-
+	if (!validArgs) {
+		std::cerr << "invalid argument." << std::endl;
+		return EXIT_FAILURE;
+	}
 
 	try {
 		app.run();
