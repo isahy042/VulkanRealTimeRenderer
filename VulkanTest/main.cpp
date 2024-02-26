@@ -138,7 +138,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72/sg-Support.s72";
+	string s72filepath = "s72-main/examples/env-cube.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -146,6 +146,8 @@ public:
 	string eventsFile = "example.events";
 
 	void run() {
+		loadModel();
+
 		initWindow();
 		initVulkan();
 		if (isHeadless) mainLoopHeadless();
@@ -238,12 +240,12 @@ private:
 		if (adjustDimension && !isHeadless) {
 			float w = static_cast<float>(WIDTH);
 			float h = static_cast<float>(HEIGHT);
-			if ((w * aspect > h) && (w * aspect <= 16000)) {
-				h = floor(w * aspect);
+			if ((h * aspect > w) && (h * aspect <= 16000)) {
+				w = floor(h * aspect);
 				HEIGHT = static_cast<uint32_t>(h);
 			}
 			else {
-				w = floor(h / aspect);
+				h = floor(w / aspect);
 				WIDTH = static_cast<uint32_t>(w);
 			}
 		}
@@ -260,10 +262,14 @@ private:
 			vector<uint32_t> ind;
 
 			for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
+
 				v.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
+				// if environment 
+
 				ind.push_back(i);
 
 			}
+
 			vertices.push_back(v);
 			indices.push_back(ind);
 
@@ -280,8 +286,8 @@ private:
 		else if (glfwGetKey(window, GLFW_KEY_D)) scene.cameraMovement.x += 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_W)) scene.cameraMovement.y += 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.y -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.1f;
+		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.1f;
 
 		else if (glfwGetKey(window, GLFW_KEY_R)) scene.cameraMovement = Vec3f(0.f);
 
@@ -790,6 +796,7 @@ private:
 		multisampling.sampleShadingEnable = VK_FALSE;
 		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+		
 		// render pass
 		VkPipelineDepthStencilStateCreateInfo depthStencil{};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -1018,14 +1025,14 @@ private:
 
 		//cout << "debugging! \n";
 		for (int obj = 0; obj < totalObjects; obj++) {
-
+			if (!scene.objects[obj].inFrame && isCulling) continue;
 			VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
 			vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
-			if (scene.objects[obj].inFrame || !isCulling) vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
+			 vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 
 		}
 
@@ -1076,7 +1083,7 @@ private:
 	}
 
 	void drawFrame() {
-		
+
 		// wait for prev frame
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -1092,23 +1099,39 @@ private:
 		}
 
 		// doing this for multiple vertex buffers!
+		//auto startTime = std::chrono::high_resolution_clock::now();
+		
+		// scene processing
 		scene.updateSceneTransformMatrix(currentFrameIndex);
+		scene.cull();
 		for (int obj = 0; obj < totalObjects; obj++) {
+			if (isCulling && !scene.objects[obj].inFrame) continue;
 			updateUniformBuffer(currentFrame, obj);
 		}
-		//cout << "\ncurrently rendering frame " << currentFrame;
 
-		// cull
-		if (isCulling) {
-			scene.cull();
-		}
+		/*auto currentTime = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		cout << "\n scene traversal time: " << time;*/
+
+
 		// manually reset the fence to the unsignaled state
 		// Only reset the fence if we are submitting work
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
 		// recording the command buffer
 		vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
+		//startTime = std::chrono::high_resolution_clock::now();
+
+		//for (int i = 0; i < 50; i++) { // bottlenecking.
 		recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+		//}
+
+		//currentTime = std::chrono::high_resolution_clock::now();
+		//time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		//cout << "\n record vertex time: " << time;
+
+		//startTime = std::chrono::high_resolution_clock::now();
+
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1126,6 +1149,7 @@ private:
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
+		
 		if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to submit draw command buffer!");
 		}
@@ -1151,6 +1175,11 @@ private:
 		else if (result != VK_SUCCESS) {
 			throw std::runtime_error("failed to present swap chain image!");
 		}
+		//recreateSwapChain();
+		//currentTime = std::chrono::high_resolution_clock::now();
+		//time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		//cout << "\n record time: " << time;
+
 		currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
@@ -1388,13 +1417,19 @@ private:
 		uboLayoutBinding.pImmutableSamplers = nullptr;
 		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+		VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+		samplerLayoutBinding.binding = 1;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-
-		std::array<VkDescriptorSetLayoutBinding, 1> bindings = { uboLayoutBinding };
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 		layoutInfo.pBindings = bindings.data();
+
 
 		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create descriptor set layout!");
@@ -1402,9 +1437,11 @@ private:
 	}
 
 	void createDescriptorPool() {
-		std::array<VkDescriptorPoolSize, 1> poolSizes{};
+		std::array<VkDescriptorPoolSize, 2> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1447,7 +1484,7 @@ private:
 				imageInfo.imageView = textureImageView;
 				imageInfo.sampler = textureSampler;
 
-				std::array<VkWriteDescriptorSet, 1> descriptorWrites{};
+				std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1456,6 +1493,14 @@ private:
 				descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 				descriptorWrites[0].descriptorCount = 1;
 				descriptorWrites[0].pBufferInfo = &bufferInfo;
+				//mark here
+				descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[1].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[1].dstBinding = 1;
+				descriptorWrites[1].dstArrayElement = 0;
+				descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[1].descriptorCount = 1;
+				descriptorWrites[1].pImageInfo = &imageInfo;
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
@@ -1480,9 +1525,11 @@ private:
 	}
 
 	// texture 
-	void createTextureImage() {
+	void createTextureImage(string filename) {
 		int texWidth, texHeight, texChannels;
-		stbi_uc* pixels = stbi_load("C:/Users/Sass/Desktop/Spring2024/672Graphics/A0/VulkanRepo/texture/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		string sn = "s72-main/examples/" + filename;
+		const char* charArray = sn.c_str();
+		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 		if (!pixels) {
@@ -1724,7 +1771,7 @@ private:
 	}
 
 	void initVulkan() {
-		loadModel();
+
 
 		createInstance();
 		createSurface();
@@ -1741,9 +1788,12 @@ private:
 		createCommandPool();
 		createDepthResources();
 		createFramebuffers();
-		//createTextureImage();
-		//createTextureImageView();
-		createTextureSampler();
+		// textures
+		for (int i = 0; i < 1; i++) {
+			createTextureImage("env-cube.png");
+			createTextureImageView();
+			createTextureSampler();
+		}
 
 		vertexBuffer.resize(totalObjects);
 		vertexBufferMemory.resize(totalObjects);
@@ -1767,12 +1817,16 @@ private:
 	}
 
 	void mainLoop() {
+		
 
 		while (!glfwWindowShouldClose(window)) {
+
 			executeKeyboardEvents();		
 			glfwPollEvents();
 			drawFrame();
+
 		}
+		
 
 		vkDeviceWaitIdle(device);
 	}
@@ -1818,8 +1872,8 @@ private:
 						FPS = 0;
 						FPSi = 0.f;
 					}else if(stoi(line.substr(p2 + 1, 1)) == 1){
-						FPS = 50;
-						FPSi = 50.f;
+						FPS = 60;
+						FPSi = 60.f;
 					}
 					else {
 						cout << "\nInvalid PLAY mode encountered in events file.\n";
@@ -1891,13 +1945,13 @@ int main(int argc, char* argv[]) {
 	HelloTriangleApplication app;
 
 	// parsing arguments in the main function ..
-	bool validArgs = true;//false;
+	bool validArgs = false;
 	
 	for (int i = 1; i < argc; i++) { 
 		string argument = argv[i];
 		if (argument == "--scene") { // scene name
 			try {
-				app.s72filepath = "s72/" + string(argv[i + 1]);
+				app.s72filepath = "s72-main/examples/" + string(argv[i + 1]);
 				cout << app.s72filepath;
 			}
 			catch (const std::exception& e) {
@@ -1951,10 +2005,10 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	if (!validArgs) {
-		std::cerr << "invalid argument." << std::endl;
-		return EXIT_FAILURE;
-	}
+	//if (!validArgs) {
+	//	std::cerr << "invalid argument." << std::endl;
+	//	return EXIT_FAILURE;
+	//}
 
 	try {
 		app.run();

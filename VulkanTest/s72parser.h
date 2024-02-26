@@ -14,6 +14,8 @@
 #include "camera.h"
 #include "mesh.h"
 #include "driver.h"
+#include "materials.h"
+
 #include "node.h"
 
 using namespace std;
@@ -28,6 +30,7 @@ inline string getName(string line)
 
 inline string getValue(string line)
 {
+    if (line.size() == 0) return "";
     std::size_t start = line.find(':');
     std::size_t end = line.size() - 1;
     while (line[end] == ',' || line[end] == '\n') {
@@ -44,6 +47,7 @@ public:
 
     vector<Camera> cameras;
     Camera *currCam;
+    Vec2i env = Vec2i(-1,-1); // index of node, index in the material vector
     Vec3f cameraMovement = Vec3f(0.f);
     bool updateFrustum = true;
 
@@ -51,6 +55,8 @@ public:
     vector<Mesh> meshes;
     vector<Driver> drivers;
     vector<Object> objects;
+    vector< shared_ptr<Material>> materials;
+    
     map<int, int> nodeToObj;
 
     int totalFrames = 0;
@@ -74,6 +80,7 @@ public:
         }
 
         s72map.push_back(make_pair(-1,-1)); // 0 is invalid
+        shared_ptr<Environment> envMat = make_shared<Environment>();
 
         while (std::getline(file, line))
         {
@@ -84,7 +91,7 @@ public:
                 if (line.substr(2, 4) == "type")
                 {
                     string objName = line.substr(9, 5);
-                    // cout << "finding object with name " << objName << "\n";
+                    cout << "finding object with name " << objName << "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {
@@ -104,7 +111,6 @@ public:
                             mesh.setValue(getName(line), getValue(line));
                             std::getline(file, line);
                         }
-                        mesh.fillAttribute();
                         meshes.push_back(mesh);
                         s72map.push_back(make_pair(1, meshes.size() - 1));
                     }
@@ -132,7 +138,7 @@ public:
                             camera.setValue(getName(line), getValue(line));
                             std::getline(file, line);
                         }
-                        camera.initializeProjection();
+
                         cameras.push_back(camera);
                         s72map.push_back(make_pair(3, cameras.size() - 1));
                         //currCam = &cameras[0];
@@ -150,14 +156,101 @@ public:
                             driver.setValue(getName(line), getValue(line));
                             std::getline(file, line);
                         }
-                        driver.initializeData();
                         drivers.push_back(driver);
                         s72map.push_back(make_pair(4, drivers.size() - 1));
+                    }
+                    else if (objName == "MATER") // 5 - material
+                    {
+                        string name = "";
+                        string normalMap = "";
+                        string displacementMap = "";
+
+                        std::getline(file, line);
+                        name = line;
+                        std::getline(file, line);
+                        if (getName(line) == "normalMap") {
+                            normalMap = line;
+                            std::getline(file, line);
+                        }
+                        if (getName(line) == "displacementMap") {
+                            displacementMap = line;
+                            std::getline(file, line);
+                        }
+                        string type = getName(line);
+                        if (type == "pbr") {
+                            shared_ptr<PBR> mat = make_shared<PBR>();
+                            mat->setValue("name", getValue(line));
+                            mat->setValue("normalMap", getValue(normalMap));
+                            mat->setValue("displacementMap", getValue(displacementMap));
+                            while (line[0] != '}')
+                            {
+                                mat->setValue(getName(line), getValue(line));
+                                std::getline(file, line);
+                            }
+                            materials.push_back(mat);
+                            s72map.push_back(make_pair(5, materials.size() - 1));
+                        }
+                        else if (type == "lambertian") {
+                            shared_ptr<Lambertian> mat = make_shared<Lambertian>();
+                            mat->setValue("name", getValue(line));
+                            mat->setValue("normalMap", getValue(normalMap));
+                            mat->setValue("displacementMap", getValue(displacementMap));
+                            while (line[0] != '}')
+                            {
+                                mat->setValue(getName(line), getValue(line));
+                                std::getline(file, line);
+                            }
+                            materials.push_back(mat);
+                            s72map.push_back(make_pair(5, materials.size() - 1));
+                        }
+                        else if (type == "mirror") {
+                            shared_ptr<Mirror> mat = make_shared<Mirror>();
+                            mat->setValue("name", getValue(line));
+                            mat->setValue("normalMap", getValue(normalMap));
+                            mat->setValue("displacementMap", getValue(displacementMap));
+                            while (line[0] != '}')
+                            {
+                                mat->setValue(getName(line), getValue(line));
+                                std::getline(file, line);
+                            }
+                            materials.push_back(mat);
+                            s72map.push_back(make_pair(5, materials.size() - 1));
+                        }
+                        else if (type == "environment") {
+                            envMat->setValue("name", getValue(line));
+                            envMat->setValue("normalMap", getValue(normalMap));
+                            envMat->setValue("displacementMap", getValue(displacementMap));
+                            materials.push_back(envMat);
+                            s72map.push_back(make_pair(5, materials.size() - 1));
+                            env.x = s72map.size() - 1;
+                        }
+                        else if (type == "simple") {
+                            shared_ptr<Simple> mat = make_shared<Simple>();
+                            mat->setValue("name", getValue(line));
+                            mat->setValue("normalMap", getValue(normalMap));
+                            mat->setValue("displacementMap", getValue(displacementMap));
+                            materials.push_back(mat);
+                            s72map.push_back(make_pair(5, materials.size() - 1));
+                        }
+                    }
+                    else if (objName == "ENVIR") // 6 - enviroment
+                    {
+                        std::getline(file, line); // name
+                        std::getline(file, line); // radiance
+                        envMat->setValue("radiance", getValue(line));
+                        env.y = s72map.size() - 1;
+                        s72map.push_back(make_pair(6, -1));
                     }
 
                 }
             }
         }
+
+        // initialize cameras, drivers, meshes
+
+        for (int i = 0; i<meshes.size(); i++) meshes[i].fillAttribute();
+        for (int i = 0; i < cameras.size(); i++) cameras[i].initializeProjection();
+        for (int i = 0; i < drivers.size(); i++) drivers[i].initializeData();
 
         currCam = &cameras[preferredCameraIndex]; //&cameras[2];//
         return cameras[preferredCameraIndex].aspect;
@@ -209,7 +302,7 @@ public:
            totalFrames = std::max(totalFrames, static_cast<int>(ceil(drive.times.back() * FPS)));
        }
        if (drivers.size() == 0) totalFrames = 2;
-       
+
 
     }
 
@@ -364,6 +457,7 @@ public:
         //cout << "updating node. \n";
         Node n = nodes[s72map[at].second];
         if (intersect) intersect = (*currCam).testIntersect(n.bbmax, n.bbmin);
+
         if (n.mesh > 0) {
             int index = nodeToObj[at];
             if (intersect) objects[index].inFrame = (*currCam).testIntersect(objects[index].bbmax, objects[index].bbmin);

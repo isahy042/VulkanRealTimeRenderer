@@ -17,8 +17,8 @@
 using namespace std;
 
 const string FOLDER = "";
-int FPS = 30;
-float FPSi = 30.f;
+int FPS = 60;
+float FPSi = 60.f;
 
 
 // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm

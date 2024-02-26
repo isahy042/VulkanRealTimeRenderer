@@ -20,6 +20,7 @@ public:
     vector<int> children;
     int mesh = -1;
     int camera = -1;
+    int env = -1;
 
     bool driveScale = false;
     bool driveTranslate = false;
@@ -57,6 +58,10 @@ public:
         {
             mesh = stoi(val);
         }
+        else if (n == "enviroment")
+        {
+            env = stoi(val);
+        }
     }
 
 
@@ -91,6 +96,8 @@ public:
     Mesh mesh;
     vector<Vec3f> position;
     vector<Vec3f> normal;
+    vector<Vec3f> texCoord;
+
     Vec3f bbmax;
     Vec3f bbmin;
     bool inFrame = true;

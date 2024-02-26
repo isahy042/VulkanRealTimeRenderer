@@ -12,8 +12,8 @@
 
 using namespace std;
 
-/// currently assuming all attributes files are the same.
-string folder = "C:/Users/Sasa/Desktop/Spring2024/672Graphics/s72-main/s72-main/examples/";
+/// *****currently assuming all attributes files are the same.
+string folder = "s72-main/examples/";
 
 class Mesh
 {
@@ -33,7 +33,10 @@ public:
         else if (n == "count")
         {
             count = stoi(val);
-            //cout << "\nmesh " << name << "is set to " << count;
+        }
+        else if (n == "material")
+        {
+            material = stoi(val);
         }
         else if (n == "indicies")
         {
@@ -58,19 +61,21 @@ public:
             std::size_t start = val.find(':');
             std::size_t end = val.find('"', start + 2);
             string filename = val.substr(start + 2, end - start - 2);
-            start = val.find(':', end + 1);
-            end = val.find(',', start + 1);
-            int offset = stoi(val.substr(start + 1, end - start));
-            start = val.find(':', end + 1);
-            end = val.find(',', start + 1);
-            int stride = stoi(val.substr(start + 1, end - start));
-            start = val.find(':', end + 1);
-            end = val.find('"', start + 2);
-            string format = val.substr(start + 2, end - start - 2);
-            if (!support(offset, stride, format, 0, 28, "R32G32B32_SFLOAT")) {
-                cout << "data is " << offset << stride << format << 0 << 28 << "R32G32B32_SFLOAT";
-                cout << "unsupported attributes encountered for a mesh!";
-            }
+            if (attributesFile.size() < 1) attributesFile = folder + filename;
+            else if (attributesFile != folder + filename) cout << "Please make sure all attributes of the same mesh are stored in the same file. \n";
+            //start = val.find(':', end + 1);
+            //end = val.find(',', start + 1);
+            //int offset = stoi(val.substr(start + 1, end - start));
+            //start = val.find(':', end + 1);
+            //end = val.find(',', start + 1);
+            //int stride = stoi(val.substr(start + 1, end - start));
+            //start = val.find(':', end + 1);
+            //end = val.find('"', start + 2);
+            //string format = val.substr(start + 2, end - start - 2);
+            //if (!support(offset, stride, format, 0, 28, "R32G32B32_SFLOAT")) {
+            //    cout << "data is " << offset << stride << format << 0 << 28 << "R32G32B32_SFLOAT";
+            //    cout << "unsupported attributes encountered for a mesh!";
+            //}
 
         }
         else if (n == "NORMAL")
@@ -78,19 +83,21 @@ public:
             std::size_t start = val.find(':');
             std::size_t end = val.find('"', start + 2);
             string filename = val.substr(start + 2, end - start - 2);
-            start = val.find(':', end + 1);
-            end = val.find(',', start + 1);
-            int offset = stoi(val.substr(start + 1, end - start));
-            start = val.find(':', end + 1);
-            end = val.find(',', start + 1);
-            int stride = stoi(val.substr(start + 1, end - start));
-            start = val.find(':', end + 1);
-            end = val.find('"', start + 2);
-            string format = val.substr(start + 2, end - start - 2);
-            if (!support(offset, stride, format, 12, 28, "R32G32B32_SFLOAT")) {
-                cout << "data is " << offset << stride << format << 12 << 28 << "R32G32B32_SFLOAT";
-                cout << "unsupported attributes encountered for a mesh!";
-            }
+            if (attributesFile.size() < 1) attributesFile = folder + filename;
+            else if (attributesFile != folder + filename) cout << "Please make sure all attributes of the same mesh are stored in the same file. \n";
+            //start = val.find(':', end + 1);
+            //end = val.find(',', start + 1);
+            //int offset = stoi(val.substr(start + 1, end - start));
+            //start = val.find(':', end + 1);
+            //end = val.find(',', start + 1);
+            //int stride = stoi(val.substr(start + 1, end - start));
+            //start = val.find(':', end + 1);
+            //end = val.find('"', start + 2);
+            //string format = val.substr(start + 2, end - start - 2);
+            //if (!support(offset, stride, format, 12, 28, "R32G32B32_SFLOAT")) {
+            //    cout << "data is " << offset << stride << format << 12 << 28 << "R32G32B32_SFLOAT";
+            //    cout << "unsupported attributes encountered for a mesh!";
+            //}
 
         }
         else if (n == "COLOR")
@@ -98,8 +105,9 @@ public:
             std::size_t start = val.find(':');
             std::size_t end = val.find('"', start + 2);
             string filename = val.substr(start + 2, end - start - 2);
-            attributesFile = folder + filename;
-            start = val.find(':', end + 1);
+            if (attributesFile.size() < 1) attributesFile = folder + filename;
+            else if (attributesFile != folder + filename) cout << "Please make sure all attributes of the same mesh are stored in the same file. \n";
+            /*start = val.find(':', end + 1);
             end = val.find(',', start + 1);
             int offset = stoi(val.substr(start + 1, end - start));
             start = val.find(':', end + 1);
@@ -111,7 +119,23 @@ public:
             if (!support(offset, stride, format, 24, 28, "R8G8B8A8_UNORM")) {
                 cout << "data is " << offset << stride << format << 24 << 28 << "R8G8B8A8_UNORM";
                 cout << "unsupported attributes encountered for a mesh!";
-            }
+            }*/
+        }
+        else if (n == "TANGENT") {
+            hasTangentData = true;
+            std::size_t start = val.find(':');
+            std::size_t end = val.find('"', start + 2);
+            string filename = val.substr(start + 2, end - start - 2);
+            if (attributesFile.size() < 1) attributesFile = folder + filename;
+            else if (attributesFile != folder + filename) cout << "Please make sure all attributes of the same mesh are stored in the same file. \n";
+        }
+        else if (n == "TEXCOORD") {
+            hasTangentData = true;
+            std::size_t start = val.find(':');
+            std::size_t end = val.find('"', start + 2);
+            string filename = val.substr(start + 2, end - start - 2);
+            if (attributesFile.size() < 1) attributesFile = folder + filename;
+            else if (attributesFile != folder + filename) cout << "Please make sure all attributes of the same mesh are stored in the same file. \n";
         }
     }
 
@@ -120,6 +144,7 @@ public:
         float f1;
         float f2;
         float f3;
+        float f4;
         unsigned char c1;
         unsigned char c2;
         unsigned char c3;
@@ -129,9 +154,9 @@ public:
         if (!infile.is_open()) {
             std::cerr << " failed to open attribute file" << std::endl;
         }
-
+        
         while (infile.read(reinterpret_cast<char*>(&f1), sizeof(f1))) {
-           
+            // position
             infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
             infile.read(reinterpret_cast<char*>(&f3), sizeof(f3));
             position.push_back(Vec3f(f1, f2, f3));
@@ -141,10 +166,24 @@ public:
             bbmin.x = min(bbmin.x, f1);
             bbmin.y = min(bbmin.y, f2);
             bbmin.z = min(bbmin.z, f3);
+            // normal
             infile.read(reinterpret_cast<char*>(&f1), sizeof(f1));
             infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
             infile.read(reinterpret_cast<char*>(&f3), sizeof(f3));
             normal.push_back(Vec3f(f1, f2, f3));
+            if (hasTangentData) {
+                // tangent
+                infile.read(reinterpret_cast<char*>(&f1), sizeof(f1));
+                infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
+                infile.read(reinterpret_cast<char*>(&f3), sizeof(f3));
+                infile.read(reinterpret_cast<char*>(&f4), sizeof(f4));
+                tangent.push_back(Vec4f(f1, f2, f3, f4));
+                // texcoord
+                infile.read(reinterpret_cast<char*>(&f1), sizeof(f1));
+                infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
+                texcoord.push_back(Vec2f(f1, f2));
+            }
+            // color
             infile.read(reinterpret_cast<char*>(&c1), sizeof(c1));
             infile.read(reinterpret_cast<char*>(&c2), sizeof(c2));
             infile.read(reinterpret_cast<char*>(&c3), sizeof(c3));
@@ -182,6 +221,9 @@ public:
         bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmin.z));
         bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmax.z));
 
+        for (uint32_t i = 0; i < v; i++) {
+            cout << "\n position: " << position[i].x << " " << position[i].y << " " << position[i].z << " normal: " << normal[i].x << " " << normal[i].y << " " << normal[i].z;
+        }
     }
 
     string name = "";
@@ -191,16 +233,26 @@ public:
     vector<uint32_t> indices;
     vector<Vec3f> position;
     vector<Vec3f> normal;
+
+    vector<Vec4f> tangent;
+    vector<Vec2f> texcoord;
+
     vector<Vec4uc> color;
+
+    
+
+    int material = -1;
 
     Vec3f bbmax = Vec3f(-INFINITY);
     Vec3f bbmin = Vec3f(INFINITY);
     // get all 8 corners 
     vector<Vec3f> bbcorners;
 
+
+
 private:
         bool inputIndices = false;
-
+        bool hasTangentData = false;
         string indexFile = "";
         int indexoffset = 0;
         string attributesFile = "";
