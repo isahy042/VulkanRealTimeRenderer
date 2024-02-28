@@ -179,7 +179,7 @@ public:
                         string type = getName(line);
                         if (type == "pbr") {
                             shared_ptr<PBR> mat = make_shared<PBR>();
-                            mat->setValue("name", getValue(line));
+                            mat->setValue("name", getValue(name));
                             mat->setValue("normalMap", getValue(normalMap));
                             mat->setValue("displacementMap", getValue(displacementMap));
                             while (line[0] != '}')
@@ -192,7 +192,7 @@ public:
                         }
                         else if (type == "lambertian") {
                             shared_ptr<Lambertian> mat = make_shared<Lambertian>();
-                            mat->setValue("name", getValue(line));
+                            mat->setValue("name", getValue(name));
                             mat->setValue("normalMap", getValue(normalMap));
                             mat->setValue("displacementMap", getValue(displacementMap));
                             while (line[0] != '}')
@@ -205,28 +205,26 @@ public:
                         }
                         else if (type == "mirror") {
                             shared_ptr<Mirror> mat = make_shared<Mirror>();
-                            mat->setValue("name", getValue(line));
+                            mat->setValue("name", getValue(name));
                             mat->setValue("normalMap", getValue(normalMap));
                             mat->setValue("displacementMap", getValue(displacementMap));
-                            while (line[0] != '}')
-                            {
-                                mat->setValue(getName(line), getValue(line));
-                                std::getline(file, line);
-                            }
+                           
                             materials.push_back(mat);
+
                             s72map.push_back(make_pair(5, materials.size() - 1));
                         }
                         else if (type == "environment") {
-                            envMat->setValue("name", getValue(line));
+                            envMat->setValue("name", getValue(name));
                             envMat->setValue("normalMap", getValue(normalMap));
                             envMat->setValue("displacementMap", getValue(displacementMap));
                             materials.push_back(envMat);
                             s72map.push_back(make_pair(5, materials.size() - 1));
+
                             env.x = s72map.size() - 1;
                         }
                         else if (type == "simple") {
                             shared_ptr<Simple> mat = make_shared<Simple>();
-                            mat->setValue("name", getValue(line));
+                            mat->setValue("name", getValue(name));
                             mat->setValue("normalMap", getValue(normalMap));
                             mat->setValue("displacementMap", getValue(displacementMap));
                             materials.push_back(mat);
@@ -252,7 +250,7 @@ public:
         for (int i = 0; i < cameras.size(); i++) cameras[i].initializeProjection();
         for (int i = 0; i < drivers.size(); i++) drivers[i].initializeData();
 
-        currCam = &cameras[preferredCameraIndex]; //&cameras[2];//
+        currCam = &cameras[preferredCameraIndex];
         return cameras[preferredCameraIndex].aspect;
     }
 
@@ -263,9 +261,6 @@ public:
             throw string("read s72 file before instantiating objects. \n");
             return 0;
        }
-
-       // incase we can't find the preferred camera.
-       //currCam = &cameras[0];
 
        // perform graph traversal, assuming no back edge.
        for (int& root : roots) {
@@ -303,7 +298,6 @@ public:
        }
        if (drivers.size() == 0) totalFrames = 2;
 
-
     }
 
     int instantiateNode(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates){
@@ -335,13 +329,20 @@ public:
             return 0;
         }
         Object o = Object(meshes[s72map[meshAt].second]);
-        // TODO: condense into a single transformation matrix, and perform a single matmul with homogenous coordinates.
+        
+        // transformation matrix
         int transformations = scales.size();
         o.transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+
+        // bounding box
         o.updateBoundingBox();
         objects.push_back(o);
+        
+        // put current object into the corresponding material's list.
+        if (o.mesh.material == -1 || s72map[o.mesh.material].first != 5) cerr << "\n mesh contains invalid material.";
+        materials[s72map[o.mesh.material].second]->addObj(objects.size() - 1);
 
-        //cout << "\n setting" << nodeAt << " " << objects.size() - 1;
+        // map the current object to its node
         nodeToObj[nodeAt] = objects.size() - 1;
     }
 

@@ -16,12 +16,7 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     // just environment
-    //outColor = texture(cubeMapTexture, surfaceNormal);
-
-    vec3 cameraPos = (ubo.cameraTrans * vec4(0.0,0.0,0.0, 1.0)).xyz;
-    vec3 I = normalize(position - cameraPos);
-    vec3 R = reflect(I, normalize(surfaceNormal));
-    outColor = vec4(texture(cubeMapTexture, R).rgb, 1.0);
+    outColor = texture(cubeMapTexture, surfaceNormal);
 }
 
 // sources: 

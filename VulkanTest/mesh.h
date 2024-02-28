@@ -221,9 +221,9 @@ public:
         bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmin.z));
         bbcorners.push_back(Vec3f(bbmax.x, bbmax.y, bbmax.z));
 
-        for (uint32_t i = 0; i < v; i++) {
-            cout << "\n position: " << position[i].x << " " << position[i].y << " " << position[i].z << " normal: " << normal[i].x << " " << normal[i].y << " " << normal[i].z;
-        }
+        //for (uint32_t i = 0; i < v; i++) {
+        //    cout << "\n position: " << position[i].x << " " << position[i].y << " " << position[i].z << " normal: " << normal[i].x << " " << normal[i].y << " " << normal[i].z;
+        //}
     }
 
     string name = "";
@@ -239,16 +239,12 @@ public:
 
     vector<Vec4uc> color;
 
-    
-
     int material = -1;
 
     Vec3f bbmax = Vec3f(-INFINITY);
     Vec3f bbmin = Vec3f(INFINITY);
     // get all 8 corners 
     vector<Vec3f> bbcorners;
-
-
 
 private:
         bool inputIndices = false;
