@@ -55,7 +55,8 @@ public:
     vector<Mesh> meshes;
     vector<Driver> drivers;
     vector<Object> objects;
-    vector< shared_ptr<Material>> materials;
+    vector<shared_ptr<Material>> materials;
+    shared_ptr<Environment> envMat;
     
     map<int, int> nodeToObj;
 
@@ -80,7 +81,7 @@ public:
         }
 
         s72map.push_back(make_pair(-1,-1)); // 0 is invalid
-        shared_ptr<Environment> envMat = make_shared<Environment>();
+        envMat = make_shared<Environment>();
 
         while (std::getline(file, line))
         {
@@ -357,6 +358,12 @@ public:
         cameras[s72map[at].second].transformMatrix = m;
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(m));
 
+        view44(cameras[s72map[at].second].transformMatrix, "transmat \n");
+        view44(cameras[s72map[at].second].viewMatrix, "viewmat \n");
+        view44(cameras[s72map[at].second].projectionMatrix, "projmat \n");
+
+
+
         return 1;
 
     }
@@ -433,7 +440,6 @@ public:
 
     void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         Vec44f m = generateTransformationMatrix(scales, trans, rotates);
-
         cameras[s72map[at].second].transformMatrix = matmul4444(transToMatrix4(cameraMovement), m);
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
         if (updateFrustum) cameras[s72map[at].second].applyTrasformation();

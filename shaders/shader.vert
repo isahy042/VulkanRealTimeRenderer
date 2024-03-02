@@ -14,10 +14,14 @@ layout(location = 3) in vec2 inTexCoord;
 
 layout(location = 0) out vec3 surfaceNormal;
 layout(location = 1) out vec3 position;
+layout(location = 2) out vec3 cameraPosition;
+
 
 
 void main() {
     gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
-    surfaceNormal = mat3(transpose(inverse(ubo.model))) * inNormal;//vec3(transpose(inverse(ubo.proj * ubo.view * ubo.model)) * vec4(inNormal, 0.0));
+    surfaceNormal = mat3(transpose(inverse(ubo.model))) * inNormal;
+    
     position = vec3(ubo.model * vec4(inPosition, 1.0));
+    cameraPosition = transpose(ubo.cameraTrans)[3].xyz;
 }

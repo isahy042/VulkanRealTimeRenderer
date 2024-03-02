@@ -8,17 +8,21 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 cameraTrans;
 } ubo;
 layout (binding = 1) uniform samplerCube cubeMapTexture;
+layout (binding = 2) uniform samplerCube unusedTexture1;
+layout (binding = 3) uniform samplerCube unusedTexture2;
+layout (binding = 4) uniform samplerCube unusedTexture3;
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
+layout(location = 2) in vec3 cameraPosition;
+
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    vec3 cameraPos = (ubo.cameraTrans * vec4(0.0,0.0,0.0, 1.0)).xyz;
-    vec3 I = normalize(position - cameraPos);
-    vec3 R = reflect(I, normalize(surfaceNormal));
-    outColor = vec4(texture(cubeMapTexture, R).rgb, 1.0);
+    vec3 I = cameraPosition - position;
+    vec3 R = reflect(normalize(I), normalize(surfaceNormal));
+    outColor = texture(cubeMapTexture, R);
 }
 
 // sources: 

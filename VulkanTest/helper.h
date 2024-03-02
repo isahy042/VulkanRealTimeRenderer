@@ -1,5 +1,5 @@
 /***
- * This file contains any additional helper functions that may be needed.
+ * This file contains any additional helper functions that may be needed in matrix operation
  */
 
 #pragma once
@@ -24,6 +24,13 @@ float FPSi = 60.f;
 // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
 // https://github.com/MonoGame/MonoGame/blob/develop/MonoGame.Framework/Matrix.cs
 
+inline float randf() { return (float)(rand() % 1000) / 1000.f; }
+
+inline int clip(int i, int min, int max) {
+    i = (i < min) ? min : i;
+    i = (i > max) ? max : i;
+    return i;
+}
 /**
 Transformation Conversion 
 */
@@ -265,7 +272,6 @@ Vec44f identity44() {
     }
     return t;
 }
-
 
 
 /**

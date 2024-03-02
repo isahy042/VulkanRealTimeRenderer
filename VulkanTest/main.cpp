@@ -29,9 +29,7 @@
 
 #include <chrono>
 
-// texture
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+
 
 # include "s72parser.h"
 
@@ -152,6 +150,7 @@ public:
 
 		initWindow();
 		initVulkan();
+
 		if (isHeadless) mainLoopHeadless();
 		else mainLoop();
 		cleanup();
@@ -217,10 +216,10 @@ private:
 	vector<VkDescriptorSet> descriptorSets;
 
 	// texture
-	VkImage textureImage;
-	VkDeviceMemory textureImageMemory;
-	VkImageView textureImageView;
-	VkSampler textureSampler;
+	vector < vector < VkImage>> textureImage;
+	vector < vector < VkDeviceMemory>> textureImageMemory;
+	vector< vector<VkImageView>> textureImageView;
+	vector < vector < VkSampler>> textureSampler;
 
 	//depth
 	VkImage depthImage;
@@ -238,6 +237,8 @@ private:
 
 	int totalFrames = 2;
 	int currentFrameIndex = 0;
+
+	string unusedTextureFile = "unused.png";
 
 	void loadModel() {
 		float aspect = scene.parseJson(s72filepath, PreferredCamera);
@@ -282,6 +283,10 @@ private:
 		totalMaterials = scene.materials.size();
 		totalFrames = scene.totalFrames;
 		cout << "\n MODEL LOADED. " << totalFrames << " total frames with #" << totalObjects << " objects, #" << totalMaterials << " materials. \n";
+	
+		// testing this:
+		// TODO: not hardcode in the specular map for the environment cube.
+		 //makeLambertianCubeMap("env-cube1.png", "lambertian-cube-map.png");
 	}
 
 
@@ -1041,7 +1046,6 @@ private:
 				vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 			}
 		}
-
 		vkCmdEndRenderPass(commandBuffer);
 
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1084,7 +1088,9 @@ private:
 		std::memcpy(ubo.view, makeUboMatrix((*scene.currCam).viewMatrix), 16 * sizeof(float));
 		std::memcpy(ubo.proj, makeUboMatrix((*scene.currCam).projectionMatrix), 16 * sizeof(float));
 		ubo.proj[5] *= -1;
+
 		std::memcpy(ubo.cameraTrans, makeUboMatrix((*scene.currCam).transformMatrix), 16 * sizeof(float));
+		 // view44((*scene.currCam).transformMatrix, "\n");
 
 		memcpy(uniformBuffersMapped[objIndex][currentImage], &ubo, sizeof(ubo));
 	}
@@ -1120,13 +1126,8 @@ private:
 		// Only reset the fence if we are submitting work
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-		
-	
-		//for (int mat = 0; mat < 1; mat++) {
-			// recording the command buffer
 			vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
 			recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-		//}
 		
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1412,14 +1413,40 @@ private:
 		uboLayoutBinding.pImmutableSamplers = nullptr;
 		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-		VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-		samplerLayoutBinding.binding = 1;
-		samplerLayoutBinding.descriptorCount = 1;
-		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		samplerLayoutBinding.pImmutableSamplers = nullptr;
-		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		// environment
+		VkDescriptorSetLayoutBinding samplerLayoutBinding1{};
+		samplerLayoutBinding1.binding = 1;
+		samplerLayoutBinding1.descriptorCount = 1;
+		samplerLayoutBinding1.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding1.pImmutableSamplers = nullptr;
+		samplerLayoutBinding1.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+		// albedo 
+		VkDescriptorSetLayoutBinding samplerLayoutBinding2{};
+		samplerLayoutBinding2.binding = 2;
+		samplerLayoutBinding2.descriptorCount = 1;
+		samplerLayoutBinding2.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding2.pImmutableSamplers = nullptr;
+		samplerLayoutBinding2.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// roughness
+		VkDescriptorSetLayoutBinding samplerLayoutBinding3{};
+		samplerLayoutBinding3.binding = 3;
+		samplerLayoutBinding3.descriptorCount = 1;
+		samplerLayoutBinding3.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding3.pImmutableSamplers = nullptr;
+		samplerLayoutBinding3.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// metalness
+		VkDescriptorSetLayoutBinding samplerLayoutBinding4{};
+		samplerLayoutBinding4.binding = 4;
+		samplerLayoutBinding4.descriptorCount = 1;
+		samplerLayoutBinding4.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding4.pImmutableSamplers = nullptr;
+		samplerLayoutBinding4.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// TODO: displacement, normal.
+		std::array<VkDescriptorSetLayoutBinding, 5> bindings = { uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,samplerLayoutBinding3,samplerLayoutBinding4 };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1432,11 +1459,19 @@ private:
 	}
 
 	void createDescriptorPool() {
-		std::array<VkDescriptorPoolSize, 2> poolSizes{};
+
+		std::array<VkDescriptorPoolSize, 5> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[3].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[3].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[4].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[4].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+
 
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1474,12 +1509,34 @@ private:
 				bufferInfo.offset = 0;
 				bufferInfo.range = sizeof(UniformBufferObject);
 
-				VkDescriptorImageInfo imageInfo{};
-				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				imageInfo.imageView = textureImageView;
-				imageInfo.sampler = textureSampler;
+				int materialIndex = scene.objects[obj].mesh.material; // node of currently used material
+				if (scene.s72map[materialIndex].first != 5) cerr << "\n incorrect object instead of material encountered at descriptor set creation.";
+				materialIndex = scene.s72map[materialIndex].second; // map material to index of materials only
+																	// environment
+				VkDescriptorImageInfo imageInfo1{};
+				imageInfo1.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo1.imageView = textureImageView[materialIndex][0];
+				imageInfo1.sampler = textureSampler[materialIndex][0];
 
-				std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+				// albedo
+				VkDescriptorImageInfo imageInfo2{};
+				imageInfo2.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo2.imageView = textureImageView[materialIndex][1];
+				imageInfo2.sampler = textureSampler[materialIndex][1];
+
+				// roughness
+				VkDescriptorImageInfo imageInfo3{};
+				imageInfo3.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo3.imageView = textureImageView[materialIndex][2];
+				imageInfo3.sampler = textureSampler[materialIndex][2];
+
+				//metalness
+				VkDescriptorImageInfo imageInfo4{};
+				imageInfo4.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo4.imageView = textureImageView[materialIndex][3];
+				imageInfo4.sampler = textureSampler[materialIndex][3];
+
+				std::array<VkWriteDescriptorSet, 5> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1488,21 +1545,42 @@ private:
 				descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 				descriptorWrites[0].descriptorCount = 1;
 				descriptorWrites[0].pBufferInfo = &bufferInfo;
-				//mark here
+				
 				descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[1].dstSet = descriptorSets[(i * totalObjects) + obj];
 				descriptorWrites[1].dstBinding = 1;
 				descriptorWrites[1].dstArrayElement = 0;
 				descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				descriptorWrites[1].descriptorCount = 1;
-				descriptorWrites[1].pImageInfo = &imageInfo;
+				descriptorWrites[1].pImageInfo = &imageInfo1;
+
+				descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[2].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[2].dstBinding = 2;
+				descriptorWrites[2].dstArrayElement = 0;
+				descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[2].descriptorCount = 1;
+				descriptorWrites[2].pImageInfo = &imageInfo2;
+
+				descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[3].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[3].dstBinding = 3;
+				descriptorWrites[3].dstArrayElement = 0;
+				descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[3].descriptorCount = 1;
+				descriptorWrites[3].pImageInfo = &imageInfo3;
+
+				descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[4].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[4].dstBinding = 4;
+				descriptorWrites[4].dstArrayElement = 0;
+				descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[4].descriptorCount = 1;
+				descriptorWrites[4].pImageInfo = &imageInfo4;
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
-
-
 		}
-
 	}
 
 	void createUniformBuffers(int objIndex) {
@@ -1519,39 +1597,7 @@ private:
 		}
 	}
 
-	// texture 
-	void createTextureImage(string filename) {
-		int texWidth, texHeight, texChannels;
-		string sn = "s72-main/examples/" + filename;
-		const char* charArray = sn.c_str();
-		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-		VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-		if (!pixels) {
-			throw std::runtime_error("failed to load texture image!");
-		}
-
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-		void* data;
-		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(device, stagingBufferMemory);
-
-		stbi_image_free(pixels);
-
-		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
-
-		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-		vkDestroyBuffer(device, stagingBuffer, nullptr);
-		vkFreeMemory(device, stagingBufferMemory, nullptr);
-	}
-
+	//// texture 
 
 	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
 		VkImageCreateInfo imageInfo{};
@@ -1680,47 +1726,112 @@ private:
 		return imageView;
 	}
 
-	void createTextureImageView()
-	{
-		textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+	void createCubeMapTextures(int materialIndex) {
+		string type = scene.materials[materialIndex]->getType();
+		textureImage[materialIndex].resize(4);
+		textureImageMemory[materialIndex].resize(4);
+		textureImageView[materialIndex].resize(4);
+		textureSampler[materialIndex].resize(4);
+
+		if (type == "env") { // create environmet cube map.
+			//TODO: take both color AND filename. right now its only file name
+			createCubeMap(scene.envMat->getBaseColor(), materialIndex, 0);
+			createCubeMap(unusedTextureFile, materialIndex, 1);
+			createCubeMap(unusedTextureFile, materialIndex, 2);
+			createCubeMap(unusedTextureFile, materialIndex, 3);
+		}
+		else if (type == "mirror") // nothing for now.
+		{
+			createCubeMap(scene.envMat->getBaseColor(), materialIndex, 0);
+			createCubeMap(unusedTextureFile, materialIndex, 1);
+			createCubeMap(unusedTextureFile, materialIndex, 2);
+			createCubeMap(unusedTextureFile, materialIndex, 3);
+		}
+		else if (type == "lamb") // nothing for now.
+		{
+			//TODO: this is the same TODO as an earlier one -- make it so that the lambertian specular fle name isn't hardcoded
+			createCubeMap("lambertian-cube-map.png", materialIndex, 0);
+			createCubeMap(scene.materials[materialIndex]->getBaseColor(), materialIndex, 1);
+			createCubeMap(unusedTextureFile, materialIndex, 2);
+			createCubeMap(unusedTextureFile, materialIndex, 3);
+		}
 	}
 
+	void createCubeMap(string filename, int matIndex, int category) {
+		createCubeMapTexture(filename, matIndex, category);
+		createCubeMapTextureView(matIndex, category);
+		createCubeMapSampler(matIndex, category);
+	}
 
-	void createCubeMapTexture(string filename) {
+	void createCubeMapTexture(string filename, int matIndex, int category) {
 
 		int texWidth, texHeight, texChannels;
-
-		string sn = "s72-main/examples/" + filename;
-		const char* charArray = sn.c_str();
-		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-		VkDeviceSize imageSize = texWidth * texHeight * 4;
-		VkDeviceSize layerSize = imageSize / 6;
-
-		if (!pixels) {
-			throw std::runtime_error("failed to load texture image!");
-		}
-
+		VkDeviceSize imageSize, layerSize;
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
 
-		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		// the file name may also be a Vec3f of colors. In this case, generate 6x1 map.
+		// TODO:make this more rigid!!!
+		if (filename.substr(0, 1) == "[" || filename.substr(filename.size() - 1, 1) == "]") {
+			Vec3f color = tovec3f(filename);
 
-		// map memory
-		void* data;
-		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+			texWidth = 1;
+			texHeight = 6;
+			texChannels = 4;
+			imageSize = texWidth * texHeight * 4;
+			layerSize = imageSize / 6;
 
-		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(device, stagingBufferMemory);
+			unsigned char pixels[24];
+			for (int i = 0; i < 6; i++) {
+				pixels[(i * 4)] = (int)(color.x*255.f);
+				pixels[(i * 4)+1] = (int)(color.y * 255.f);
+				pixels[(i * 4)+2] = (int)(color.z * 255.f);
+				pixels[(i * 4)+3] = 255;
+			}
 
-		stbi_image_free(pixels);
+			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			// map memory
+			void* data;
+			vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+
+			memcpy(data, pixels, static_cast<size_t>(imageSize));
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			//TODO: free this.uc
+
+			//stbi_image_free(pixels);
+		}
+		else {
+			string sn = "s72-main/examples/" + filename;
+			const char* charArray = sn.c_str();
+			stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+			VkDeviceSize imageSize = texWidth * texHeight * 4;
+			VkDeviceSize layerSize = imageSize / 6;
+
+			if (!pixels) {
+				throw std::runtime_error("failed to load texture image!");
+			}
+
+			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			// map memory
+			void* data;
+			vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+
+			memcpy(data, pixels, static_cast<size_t>(imageSize));
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			stbi_image_free(pixels);
+		}
 
 
-		createCubeMapImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+		createCubeMapImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[matIndex][category], textureImageMemory[matIndex][category]);
 
-		transitionCubeMapImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		copyBufferToCubeMapImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-		transitionCubeMapImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToCubeMapImage(stagingBuffer, textureImage[matIndex][category], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+		transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1748,12 +1859,12 @@ private:
 
 		endSingleTimeCommands(commandBuffer);
 	}
-	void createCubeMapTextureView()
+	void createCubeMapTextureView(int matIndex, int category)
 	{
-		textureImageView = createCubeMapImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+		textureImageView[matIndex][category] = createCubeMapImageView(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
 
-	void createCubeMapSampler() {
+	void createCubeMapSampler(int matIndex, int category) {
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
@@ -1773,7 +1884,7 @@ private:
 		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler[matIndex][category]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create texture sampler!");
 		}
 	}
@@ -1884,31 +1995,6 @@ private:
 
 		endSingleTimeCommands(commandBuffer);
 	}
-	void createTextureSampler() {
-		VkPhysicalDeviceProperties properties{};
-		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-
-		VkSamplerCreateInfo samplerInfo{};
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = VK_FILTER_LINEAR;
-		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
-		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		//Instead of enforcing the availability of anisotropic filtering, it s also possible to simply not use it by conditionally setting:
-		// samplerInfo.maxAnisotropy = 1.0f;
-		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-
-		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create texture sampler!");
-		}
-	}
 
 	// depth
 	void createDepthResources() {
@@ -1985,13 +2071,19 @@ private:
 		pipelineLayout.resize(totalMaterials);
 		graphicsPipeline.resize(totalMaterials);
 
+		textureImage.resize(totalMaterials);
+		textureImageMemory.resize(totalMaterials);
+		textureImageView.resize(totalMaterials);
+		textureSampler.resize(totalMaterials);
+
+		// add more sampler
 		for (int i = 0; i < totalMaterials; i++) {
+			cout << "\nCreating pipeline and sampler for material " << i;
 			createGraphicsPipeline(i);
+			createCubeMapTextures(i);
+			// normal, displacement, albedo (lambertian, pbr), roughness (pbr), metalness (pbr)
 			
 		}
-		createCubeMapTexture("env-cube.png");
-		createCubeMapTextureView();
-		createCubeMapSampler();
 
 		vertexBuffer.resize(totalObjects);
 		vertexBufferMemory.resize(totalObjects);
@@ -2001,7 +2093,10 @@ private:
 		uniformBuffersMemory.resize(totalObjects);
 		uniformBuffersMapped.resize(totalObjects);
 
+		cout << "\nCreating descriptor pool";
 		createDescriptorPool();
+
+		cout << "\nCreating buffers";
 
 		for (int obj = 0; obj < totalObjects; obj++) {
 			createVertexBuffer(obj);
@@ -2009,9 +2104,17 @@ private:
 			createUniformBuffers(obj);
 		}
 
+		cout << "\nCreating descriptor sets.";
+
+
 		createDescriptorSets();
+
+		cout << "\nAlmost done..";
+
 		createCommandBuffer();
 		createSyncObjects();
+
+		cout << "\nVulkan Successfully Initialized.";
 	}
 
 	void mainLoop() {
@@ -2092,11 +2195,17 @@ private:
 	void cleanup() {
 		cleanupSwapChain();
 
-		vkDestroySampler(device, textureSampler, nullptr);
-		vkDestroyImageView(device, textureImageView, nullptr);
+		for (size_t i = 0; i < totalMaterials; i++) {
+			for (size_t j = 0; j < 4; j++) {
+				vkDestroySampler(device, textureSampler[i][j], nullptr);
+				vkDestroyImageView(device, textureImageView[i][j], nullptr);
 
-		vkDestroyImage(device, textureImage, nullptr);
-		vkFreeMemory(device, textureImageMemory, nullptr);
+				vkDestroyImage(device, textureImage[i][j], nullptr);
+				vkFreeMemory(device, textureImageMemory[i][j], nullptr);
+			}
+			
+		}
+		
 
 		for (size_t obj = 0; obj < totalObjects; obj++) {
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
