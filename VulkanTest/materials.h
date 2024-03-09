@@ -29,21 +29,8 @@ public:
 	virtual string getRoughness() { return ""; };
 	virtual string getMetalness() { return ""; };
 
-
-
 	virtual vector<int> getObjList() { return vector<int>(); };
 	virtual void addObj(int obj) {};
-
-
-
-	//string name;
-	//string type;
-	//string vertShader = "vert.spv";
-	//string fragShader;
-
-	//string normalMap;
-	//string displacementMap;
-	//vector<int> objInstance;
 
 };
 
@@ -55,8 +42,8 @@ public:
 	string fragShader = "env-frag.spv";
 	vector<int> objInstance;
 
-	string normalMap;
-	string displacementMap;
+	string normalMap = "[0.5,0.5,1]"; // default value
+	string displacementMap = "[0,0,0]";
 
 	string radiance;
 
@@ -67,13 +54,29 @@ public:
 		}
 		else if (n == "radiance")
 		{
-			if (val[0] == '[' || val[val.size()-1] == ']') {
+			if (val[0] == '[' || val[val.size() - 1] == ']') {
 				radiance = val;
 			}
 			else {
-			size_t start = val.find(':') + 2;
-			size_t end = val.find('"', start);
-			radiance = val.substr(start, end - start);
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				radiance = val.substr(start, end - start);
+			}
+		}
+		else if (n == "normalMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				normalMap = val.substr(start, end - start);
+			}
+		}
+		else if (n == "displacementMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				displacementMap = val.substr(start, end - start);
 			}
 		}
 	}
@@ -82,6 +85,8 @@ public:
 	vector<int> getObjList() override { return  objInstance; }
 	string getType() override{ return type; };
 	string getBaseColor() override{ return radiance; };
+	string getDisplacement() override { return displacementMap; }
+	string getNormal() override { return normalMap; }
 
 	void addObj(int obj) { objInstance.push_back(obj);  }
 };
@@ -94,13 +99,29 @@ public:
 	string fragShader = "mirror-frag.spv";
 	vector<int> objInstance;
 
-	string normalMap;
-	string displacementMap;
+	string normalMap = "[0.5,0.5,1]"; // default value
+	string displacementMap = "[0,0,0]";
 
 	void setValue(string n, string val) override {
 		if (n == "name")
 		{
 			name = val.substr(1, val.size() - 3);
+		}
+		else if (n == "normalMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				normalMap = val.substr(start, end - start);
+			}
+		}
+		else if (n == "displacementMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				displacementMap = val.substr(start, end - start);
+			}
 		}
 
 	}
@@ -108,6 +129,8 @@ public:
 	string getFragshader() override { return fragShader; }
 	vector<int> getObjList() override { return  objInstance; }
 	string getType()  override { return type; }
+	string getDisplacement() override { return displacementMap; }
+	string getNormal() override { return normalMap; }
 
 	void addObj(int obj) { objInstance.push_back(obj); }
 
@@ -118,14 +141,14 @@ public:
 	string name;
 	string type = "pbr";
 	string vertShader = "vert.spv";
-	string fragShader;
+	string fragShader = "pbr-frag.spv";
 
 	string albedo;
-	string rougness;
+	string roughness;
 	string metalness;
 
-	string normalMap;
-	string displacementMap;
+	string normalMap = "[0.5,0.5,1]"; // default value
+	string displacementMap = "[0,0,0]";
 	vector<int> objInstance;
 
 	string getVertshader() override { return vertShader; }
@@ -134,14 +157,77 @@ public:
 	string getType() override { return type; };
 
 	string getBaseColor() override { return albedo; };
-	string getRoughness() override { return rougness; };
+	string getRoughness() override { return roughness; };
 	string getMetalness() override { return metalness; };
+
+	string getDisplacement() override { return displacementMap; }
+	string getNormal() override { return normalMap; }
+
+	void setValue(string n, string val) override {
+		if (n == "name")
+		{
+			name = val.substr(1, val.size() - 3);
+		}
+		else if (n == "albedo")
+		{
+			if (val[0] == '[' || val[val.size() - 1] == ']') {
+				albedo = val;
+			}
+			else {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				albedo = val.substr(start, end - start);
+			}
+		}
+		else if (n == "roughness")
+		{
+			if (val[0] == '{' || val[1] == '{' || val[val.size() - 1] == '}') {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				roughness = val.substr(start, end - start);
+			}
+			else {
+				string r = to_string(stof(val));
+				roughness = "[" + r + "," + r + "," + r + "]";
+			}
+		}
+		else if (n == "metalness")
+		{
+			if (val[0] == '{' || val[1] == '{' || val[val.size() - 1] == '}') {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				metalness = val.substr(start, end - start);
+			}
+			else {
+				string m = to_string(stof(val));
+				metalness = "[" + m + "," + m + "," + m + "]";
+			}
+
+		}
+		else if (n == "normalMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				normalMap = val.substr(start, end - start);
+			}
+		}
+		else if (n == "displacementMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				displacementMap = val.substr(start, end - start);
+			}
+		}
+
+	}
 
 	void addObj(int obj) { objInstance.push_back(obj); }
 
 };
 
-class Lambertian :public  Material {
+class Lambertian :public Material {
 public:
 	string name;
 	string type = "lamb";
@@ -149,8 +235,8 @@ public:
 	string fragShader = "lamb-frag.spv";
 	string albedo;
 
-	string normalMap;
-	string displacementMap;
+	string normalMap = "[0.5,0.5,1]"; // default value
+	string displacementMap = "[0,0,0]";
 	vector<int> objInstance;
 
 	void setValue(string n, string val) override {
@@ -170,6 +256,22 @@ public:
 			}
 			cout << albedo << "\n";
 		}
+		else if (n == "normalMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				normalMap = val.substr(start, end - start);
+			}
+		}
+		else if (n == "displacementMap")
+		{
+			if (val.size() != 0) {
+				size_t start = val.find(':') + 2;
+				size_t end = val.find('"', start);
+				displacementMap = val.substr(start, end - start);
+			}
+		}
 	}
 
 	string getVertshader() override { return vertShader; }
@@ -177,6 +279,9 @@ public:
 	vector<int> getObjList() override { return  objInstance; }
 	string getType()  override { return type; };
 	string getBaseColor() override { return albedo; };
+
+	string getDisplacement() override { return displacementMap; }
+	string getNormal() override { return normalMap; }
 
 	void addObj(int obj) { objInstance.push_back(obj); }
 
@@ -187,16 +292,19 @@ public:
 	string name;
 	string type = "simple";
 	string vertShader = "vert.spv";
-	string fragShader;
+	string fragShader = "simple-frag.spv";
 
-	string normalMap;
-	string displacementMap;
+	string normalMap = "[0.5,0.5,1]"; // default value
+	string displacementMap = "[0,0,0]";
 	vector<int> objInstance;
 
 	string getVertshader() override { return vertShader; }
 	string getFragshader() override { return fragShader; }
 	vector<int> getObjList() override { return  objInstance; }
 	string getType()  override { return type; };
+
+	string getDisplacement() override { return displacementMap; }
+	string getNormal() override { return normalMap; }
 
 	void addObj(int obj) { objInstance.push_back(obj); }
 
@@ -306,9 +414,11 @@ Vec3f randomOnUnitHemisphere(Vec3f normal) {
 }
 
 // helper functions for material cubemap parsing.
-void makeLambertianCubeMap(string inFilename, string outFilename) {
+void makeLambertianCubeMap(string inFilename) {
 	int inWidth, inHeight, texChannels;
 	string in = "s72-main/examples/" + inFilename;
+	string outFilename = "lambertian-map-" + inFilename;
+
 	const char* inc = in.c_str();
 	stbi_uc* pixels = stbi_load(inc, &inWidth, &inHeight, &texChannels, STBI_rgb_alpha);
 
@@ -318,6 +428,7 @@ void makeLambertianCubeMap(string inFilename, string outFilename) {
 	vector<vector<Vec4f>> inImg(inHeight, vector<Vec4f>(inWidth, Vec4f(0.f)));
 
 	int p = 0;
+	cout << "\n generating cube map for file " << inFilename;
 
 	for (int h = 0; h < inHeight; h++) {
 		for (int w = 0; w < inWidth; w++) {
@@ -387,9 +498,9 @@ void makeLambertianCubeMap(string inFilename, string outFilename) {
 			else if (cubeIndex == 5) normal[0] -= dx;
 
 			Vec4f sampledColor = Vec4f(0.f);
-			int validNum = 1000;
+			int validNum = 10000;
 			
-			for (int s = 0; s < 1000; s++) {
+			for (int s = 0; s < 10000; s++) {
 				Vec3f scatterDir = randomOnUnitHemisphere(normal);
 				float cosineTheta = dot(normalize(scatterDir), normalize(normal));
 				if (cosineTheta <= 0) {
@@ -406,7 +517,7 @@ void makeLambertianCubeMap(string inFilename, string outFilename) {
 			}	
 
 			outImg[h][w] = 2 * sampledColor / (float)validNum;
-			outImg[h][w].w = 1.f;
+			//outImg[h][w].w = 0.502f;
 		}
 	}
 
@@ -419,6 +530,172 @@ void makeLambertianCubeMap(string inFilename, string outFilename) {
 			
 			outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
 			outImgArr[(p * 4) + 1] =clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
+			outImgArr[(p * 4) + 2] = clip((int)floor((outImg[h][w].z * 255.f)), 0, 255);
+			outImgArr[(p * 4) + 3] = clip((int)floor((outImg[h][w].w * 255.f)), 0, 255);
+			p++;
+		}
+	}
+
+	string on = "s72-main/examples/" + outFilename;
+	const char* onc = on.c_str();
+	//stbi__create_png_image();
+	stbi_write_png(onc, outWidth, outWidth * 6, 4, outImgArr, 4 * outWidth);
+
+}
+
+
+// Make mipmap levels for pbr
+// combine mipmap with shaders to achieve the effect
+// support normal maps
+// tone mapping
+// complete rest of normal map support
+// create scene
+// write report
+// analyze run time
+// 
+
+//https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
+Vec3f ImportanceSampleGGX(Vec2f Xi, float Roughness, Vec3f N)
+{
+	float a = Roughness * Roughness;
+	float Phi = 2 * 3.1415926 * Xi.x;
+	float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
+	float SinTheta = sqrt(1 - CosTheta * CosTheta);
+	Vec3f H;
+	H.x = SinTheta * cos(Phi);
+	H.y = SinTheta * sin(Phi);
+	H.z = CosTheta;
+	Vec3f UpVector = abs(N.z) < 0.999 ? Vec3f(0, 0, 1) : Vec3f(1, 0, 0);
+	Vec3f TangentX = normalize(cross(UpVector, N));
+	Vec3f TangentY = cross(N, TangentX);
+	return TangentX * H.x + TangentY * H.y + N * H.z;
+}
+
+// helper functions for material cubemap parsing.
+void makePBRCubeMap(string inFilename, float roughness, int index) {
+	int inWidth, inHeight, texChannels;
+	string in = "s72-main/examples/" + inFilename;
+	string outFilename = "pbr-map-" + to_string(index) + "-" + inFilename;
+
+	const char* inc = in.c_str();
+	stbi_uc* pixels = stbi_load(inc, &inWidth, &inHeight, &texChannels, STBI_rgb_alpha);
+
+	if (inHeight / inWidth != 6) cerr << "please input image with correct dimension (wx6w)";
+	cout << "\n generating cube map for file " << inFilename << " at roughness " << roughness;
+	// store in Vec4f, 2D vector
+	vector<vector<Vec4f>> inImg(inHeight, vector<Vec4f>(inWidth, Vec4f(0.f)));
+
+	int p = 0;
+
+	for (int h = 0; h < inHeight; h++) {
+		for (int w = 0; w < inWidth; w++) {
+			inImg[h][w] = Vec4f((float)(pixels[(p * 4)]) / 255.f, (float)(pixels[(p * 4) + 1]) / 255.f, (float)(pixels[(p * 4) + 2]) / 255.f, (float)(pixels[(p * 4) + 3]) / 255.f);
+			p++;
+		}
+	}
+
+	//  Vec4f, 2D vector to store new map
+	const int outWidth = 32;
+	vector<vector<Vec4f>> outImg(outWidth * 6);
+	for (int h = 0; h < outWidth * 6; h++) {
+		outImg[h].resize(outWidth);
+	}
+
+	// for each normal, sample 100 times and average
+	float dx = 2.f / (float)outWidth;
+	float dy = 2.f / (float)outWidth;
+	float dz = 2.f / (float)outWidth;
+	Vec3f normal = Vec3f(0.f);
+	int cubeIndex = 0;
+
+	for (int h = 0; h < outWidth * 6; h++) {
+		// generate normal
+		if (h % outWidth == 0) {
+			cubeIndex = h / outWidth;
+			if (cubeIndex == 0) normal = Vec3f(1.f);
+			else if (cubeIndex == 1) normal = Vec3f(-1.f, 1.f, -1.f);
+			else if (cubeIndex == 2) normal = Vec3f(-1.f, 1.f, -1.f);
+			else if (cubeIndex == 3) normal = Vec3f(-1.f, -1.f, 1.f);
+			else if (cubeIndex == 4) normal = Vec3f(-1.f, 1.f, 1.f);
+			else if (cubeIndex == 5) normal = Vec3f(1.f, 1.f, -1.f);
+		}
+
+		if (cubeIndex == 0) {
+			normal[1] -= dy;
+			normal[2] = 1.f;
+		}
+		else if (cubeIndex == 1) {
+			normal[1] -= dy;
+			normal[2] = -1.f;
+		}
+		else if (cubeIndex == 2) {
+			normal[2] += dz;
+			normal[0] = -1.f;
+		}
+		else if (cubeIndex == 3) {
+			normal[2] -= dz;
+			normal[0] = -1.f;
+		}
+		else if (cubeIndex == 4) {
+			normal[1] -= dy;
+			normal[0] = -1.f;
+		}
+		else if (cubeIndex == 5) {
+			normal[1] -= dy;
+			normal[0] = 1.f;
+		}
+
+		for (int w = 0; w < outWidth; w++) {
+			// generate normal
+			if (cubeIndex == 0) normal[2] -= dz;
+			else if (cubeIndex == 1) normal[2] += dz;
+			else if (cubeIndex == 2) normal[0] += dx;
+			else if (cubeIndex == 3) normal[0] += dx;
+			else if (cubeIndex == 4) normal[0] += dx;
+			else if (cubeIndex == 5) normal[0] -= dx;
+
+			Vec4f sampledColor = Vec4f(0.f);
+			Vec3f viewing = normal;
+			float totalWeight = 0;
+
+			for (int s = 0; s < 2000; s++) {
+
+				Vec2f Xi = Vec2f(randf(), randf());
+				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal);
+				Vec3f scatterDir = 2 * dot(viewing, H) * H - viewing;
+
+				Vec2f index = getIndexForCubeMap(scatterDir);
+
+				int iy = clip((int)floor(index.x * (inHeight - 1)), 0, inHeight - 1);
+				int ix = clip((int)floor(index.y * (inWidth - 1)), 0, inWidth - 1);
+
+				Vec4f c = inImg[iy][ix];
+
+				float NoL = clip(dot(normal, scatterDir), 0, 1);
+
+				if (!(NoL <= 1) && !(NoL >= 0)) cout << "\n NoL" << NoL;
+
+				if (NoL > 0)
+				{
+					sampledColor = sampledColor + c * NoL;
+					totalWeight += NoL;
+				}
+			}
+
+			outImg[h][w] = sampledColor / totalWeight;
+			//outImg[h][w].w = 1.f;
+		}
+	}
+
+
+	stbi_uc outImgArr[outWidth * outWidth * 4 * 6];
+
+	p = 0;
+	for (int h = 0; h < outWidth * 6; h++) {
+		for (int w = 0; w < outWidth; w++) {
+
+			outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
+			outImgArr[(p * 4) + 1] = clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
 			outImgArr[(p * 4) + 2] = clip((int)floor((outImg[h][w].z * 255.f)), 0, 255);
 			outImgArr[(p * 4) + 3] = clip((int)floor((outImg[h][w].w * 255.f)), 0, 255);
 			p++;

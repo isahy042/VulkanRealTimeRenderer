@@ -80,10 +80,9 @@ struct SwapChainSupportDetails {
 struct Vertex {
 	Vec3f pos;
 	Vec3f normal;
-	Vec3f color;
+	Vec4f tangent;
 	Vec2f texCoord;
-	//glm::vec3 color;
-	//glm::vec2 texCoord;
+	Vec4f color;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription{};
@@ -94,8 +93,8 @@ struct Vertex {
 		return bindingDescription;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
+	static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 5> attributeDescriptions{};
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -107,16 +106,20 @@ struct Vertex {
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
-
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, color);
+		attributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[2].offset = offsetof(Vertex, tangent);
 
 		attributeDescriptions[3].binding = 0;
 		attributeDescriptions[3].location = 3;
 		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
 		attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
+
+		attributeDescriptions[4].binding = 0;
+		attributeDescriptions[4].location = 4;
+		attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		attributeDescriptions[4].offset = offsetof(Vertex, color);
 
 		return attributeDescriptions;
 	}
@@ -216,10 +219,10 @@ private:
 	vector<VkDescriptorSet> descriptorSets;
 
 	// texture
-	vector < vector < VkImage>> textureImage;
-	vector < vector < VkDeviceMemory>> textureImageMemory;
-	vector< vector<VkImageView>> textureImageView;
-	vector < vector < VkSampler>> textureSampler;
+	vector<vector<VkImage>> textureImage;
+	vector<vector<VkDeviceMemory>> textureImageMemory;
+	vector<vector<VkImageView>> textureImageView;
+	vector<vector<VkSampler>> textureSampler;
 
 	//depth
 	VkImage depthImage;
@@ -256,37 +259,48 @@ private:
 		}
 		// create objects
 		scene.InstantiateObjects();
-		// one vertex buffer for each object!
-		// just two buffers for now.
-
-		// TODO: allocate multiple vertex buffer, render them.
 
 		int c = 0;
 		for (int obj = 0; obj < scene.objects.size(); obj++) {
 			vector<Vertex> v;
 			vector<uint32_t> ind;
 
-			for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
-
-				v.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f} });
-				// if environment 
-
-				ind.push_back(i);
-
+			int matind = scene.s72map[scene.objects[obj].mesh.material].second;
+			if (scene.materials[matind]->getType() == "simple") {
+				for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
+					v.push_back({scene.objects[obj].position[i], scene.objects[obj].normal[i], {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, scene.objects[obj].color[i] });
+					ind.push_back(i);
+				}
 			}
+			else {
 
+				for (int i = 0; i < scene.objects[obj].mesh.count; i++) {
+					v.push_back({ scene.objects[obj].position[i], scene.objects[obj].normal[i], scene.objects[obj].tangent[i], scene.objects[obj].texcoord[i], scene.objects[obj].color[i]});
+					ind.push_back(i);
+				}
+			}
 			vertices.push_back(v);
 			indices.push_back(ind);
+
 
 		}
 		totalObjects = scene.objects.size();
 		totalMaterials = scene.materials.size();
 		totalFrames = scene.totalFrames;
 		cout << "\n MODEL LOADED. " << totalFrames << " total frames with #" << totalObjects << " objects, #" << totalMaterials << " materials. \n";
-	
+	 
 		// testing this:
 		// TODO: not hardcode in the specular map for the environment cube.
-		 //makeLambertianCubeMap("env-cube1.png", "lambertian-cube-map.png");
+		//makeLambertianCubeMap("env-cube1.png");
+		//makeLambertianCubeMap("env-cube.png");
+
+		////makePBRCubeMap("env-cube.png", 1.f, 0);
+
+		//float roughness = 0.f;
+		//for (int r = 0; r < 11; r++) {
+		//	makePBRCubeMap("env-cube.png", roughness, r);
+		//	roughness += 0.1f;
+		//}
 	}
 
 
@@ -577,7 +591,7 @@ private:
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
 
 		for (const auto& availableFormat : availableFormats) {
-			if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			if (availableFormat.format == VK_FORMAT_R8G8B8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT) {
 				return availableFormat;
 			}
 		}
@@ -1445,8 +1459,24 @@ private:
 		samplerLayoutBinding4.pImmutableSamplers = nullptr;
 		samplerLayoutBinding4.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		// normal
+		VkDescriptorSetLayoutBinding samplerLayoutBinding5{};
+		samplerLayoutBinding5.binding = 5;
+		samplerLayoutBinding5.descriptorCount = 1;
+		samplerLayoutBinding5.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding5.pImmutableSamplers = nullptr;
+		samplerLayoutBinding5.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// dsplacemet
+		VkDescriptorSetLayoutBinding samplerLayoutBinding6{};
+		samplerLayoutBinding6.binding = 6;
+		samplerLayoutBinding6.descriptorCount = 1;
+		samplerLayoutBinding6.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding6.pImmutableSamplers = nullptr;
+		samplerLayoutBinding6.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		// TODO: displacement, normal.
-		std::array<VkDescriptorSetLayoutBinding, 5> bindings = { uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,samplerLayoutBinding3,samplerLayoutBinding4 };
+		std::array<VkDescriptorSetLayoutBinding, 7> bindings = { uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,samplerLayoutBinding3,samplerLayoutBinding4 ,samplerLayoutBinding5,samplerLayoutBinding6};
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1460,7 +1490,7 @@ private:
 
 	void createDescriptorPool() {
 
-		std::array<VkDescriptorPoolSize, 5> poolSizes{};
+		std::array<VkDescriptorPoolSize, 7> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1471,6 +1501,10 @@ private:
 		poolSizes[3].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[4].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[4].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[5].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[5].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[6].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[6].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 
 		VkDescriptorPoolCreateInfo poolInfo{};
@@ -1500,7 +1534,6 @@ private:
 			throw std::runtime_error("failed to allocate descriptor sets!");
 		}
 
-
 		// when 1D array, store so that all objects of one frame are together.
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 			for (size_t obj = 0; obj < totalObjects; obj++) {
@@ -1512,7 +1545,8 @@ private:
 				int materialIndex = scene.objects[obj].mesh.material; // node of currently used material
 				if (scene.s72map[materialIndex].first != 5) cerr << "\n incorrect object instead of material encountered at descriptor set creation.";
 				materialIndex = scene.s72map[materialIndex].second; // map material to index of materials only
-																	// environment
+
+				// environment
 				VkDescriptorImageInfo imageInfo1{};
 				imageInfo1.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				imageInfo1.imageView = textureImageView[materialIndex][0];
@@ -1536,7 +1570,19 @@ private:
 				imageInfo4.imageView = textureImageView[materialIndex][3];
 				imageInfo4.sampler = textureSampler[materialIndex][3];
 
-				std::array<VkWriteDescriptorSet, 5> descriptorWrites{};
+				//normal
+				VkDescriptorImageInfo imageInfo5{};
+				imageInfo5.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo5.imageView = textureImageView[materialIndex][4];
+				imageInfo5.sampler = textureSampler[materialIndex][4];
+
+				//displacement
+				VkDescriptorImageInfo imageInfo6{};
+				imageInfo6.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo6.imageView = textureImageView[materialIndex][5];
+				imageInfo6.sampler = textureSampler[materialIndex][5];
+
+				std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1577,6 +1623,22 @@ private:
 				descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				descriptorWrites[4].descriptorCount = 1;
 				descriptorWrites[4].pImageInfo = &imageInfo4;
+
+				descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[5].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[5].dstBinding = 5;
+				descriptorWrites[5].dstArrayElement = 0;
+				descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[5].descriptorCount = 1;
+				descriptorWrites[5].pImageInfo = &imageInfo5;
+
+				descriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[6].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[6].dstBinding = 6;
+				descriptorWrites[6].dstArrayElement = 0;
+				descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[6].descriptorCount = 1;
+				descriptorWrites[6].pImageInfo = &imageInfo6;
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
@@ -1728,10 +1790,10 @@ private:
 
 	void createCubeMapTextures(int materialIndex) {
 		string type = scene.materials[materialIndex]->getType();
-		textureImage[materialIndex].resize(4);
-		textureImageMemory[materialIndex].resize(4);
-		textureImageView[materialIndex].resize(4);
-		textureSampler[materialIndex].resize(4);
+		textureImage[materialIndex].resize(6);
+		textureImageMemory[materialIndex].resize(6);
+		textureImageView[materialIndex].resize(6);
+		textureSampler[materialIndex].resize(6);
 
 		if (type == "env") { // create environmet cube map.
 			//TODO: take both color AND filename. right now its only file name
@@ -1747,14 +1809,24 @@ private:
 			createCubeMap(unusedTextureFile, materialIndex, 2);
 			createCubeMap(unusedTextureFile, materialIndex, 3);
 		}
-		else if (type == "lamb") // nothing for now.
+		else if (type == "lamb") // 
 		{
-			//TODO: this is the same TODO as an earlier one -- make it so that the lambertian specular fle name isn't hardcoded
-			createCubeMap("lambertian-cube-map.png", materialIndex, 0);
+			createCubeMap("lambertian-map-env-cube.png", materialIndex, 0);
 			createCubeMap(scene.materials[materialIndex]->getBaseColor(), materialIndex, 1);
 			createCubeMap(unusedTextureFile, materialIndex, 2);
 			createCubeMap(unusedTextureFile, materialIndex, 3);
 		}
+		else if (type == "pbr") //
+		{
+			createCubeMap(scene.materials[materialIndex]->getBaseColor(), materialIndex, 0);
+			createCubeMap(scene.materials[materialIndex]->getRoughness(), materialIndex, 1);
+			createCubeMap(scene.materials[materialIndex]->getMetalness(), materialIndex, 2);
+			createCubeMap(scene.envMat->getBaseColor(), materialIndex, 3);
+		}
+
+		// displacement and normal map.
+		createCubeMap(scene.materials[materialIndex]->getNormal(), materialIndex, 4);
+		createCubeMap(scene.materials[materialIndex]->getDisplacement(), materialIndex, 5);
 	}
 
 	void createCubeMap(string filename, int matIndex, int category) {
@@ -1786,7 +1858,7 @@ private:
 				pixels[(i * 4)] = (int)(color.x*255.f);
 				pixels[(i * 4)+1] = (int)(color.y * 255.f);
 				pixels[(i * 4)+2] = (int)(color.z * 255.f);
-				pixels[(i * 4)+3] = 255;
+				pixels[(i * 4)+3] = 128;
 			}
 
 			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
@@ -2106,7 +2178,6 @@ private:
 
 		cout << "\nCreating descriptor sets.";
 
-
 		createDescriptorSets();
 
 		cout << "\nAlmost done..";
@@ -2196,17 +2267,15 @@ private:
 		cleanupSwapChain();
 
 		for (size_t i = 0; i < totalMaterials; i++) {
-			for (size_t j = 0; j < 4; j++) {
+			for (size_t j = 0; j < 6; j++) {
 				vkDestroySampler(device, textureSampler[i][j], nullptr);
 				vkDestroyImageView(device, textureImageView[i][j], nullptr);
 
 				vkDestroyImage(device, textureImage[i][j], nullptr);
 				vkFreeMemory(device, textureImageMemory[i][j], nullptr);
 			}
-			
 		}
 		
-
 		for (size_t obj = 0; obj < totalObjects; obj++) {
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 				vkDestroyBuffer(device, uniformBuffers[obj][i], nullptr);
@@ -2301,6 +2370,30 @@ int main(int argc, char* argv[]) {
 				adjustDimension = false;
 				HEIGHT = min(16000, stoi((string(argv[i + 2]))));
 				WIDTH = min(16000,stoi((string(argv[i + 1]))));
+			}
+			catch (const std::exception& e) {
+				std::cerr << "invalid argument." << std::endl;
+				return EXIT_FAILURE;
+			}
+			i += 2;
+		}
+		else if (argument == "--cube") { // cube
+			try {
+				string inFile = string(argv[i + 1]);
+				string mode = string(argv[i + 2]);
+				if (mode == "--lambertian") {
+					makeLambertianCubeMap(inFile);
+				}
+				else if (mode == "--gxx") {
+					float roughness = 0.f;
+					for (int r = 0; r < 11; r++) {
+						makePBRCubeMap(inFile, roughness, r);
+						roughness += 0.1f;
+					}
+				}
+				else {
+					cout << "\n please enter valid cube map generation mode.";
+				}
 			}
 			catch (const std::exception& e) {
 				std::cerr << "invalid argument." << std::endl;

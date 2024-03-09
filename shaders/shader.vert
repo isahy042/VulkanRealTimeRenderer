@@ -9,13 +9,17 @@ layout(binding = 0) uniform UniformBufferObject {
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inColor;
+layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inTexCoord;
+layout(location = 4) in vec4 inColor;
+
 
 layout(location = 0) out vec3 surfaceNormal;
 layout(location = 1) out vec3 position;
 layout(location = 2) out vec3 cameraPosition;
-
+layout(location = 3) out vec4 outColor;
+layout(location = 4) out vec3 tang;
+layout(location = 5) out vec3 bitang;
 
 
 void main() {
@@ -24,4 +28,9 @@ void main() {
     
     position = vec3(ubo.model * vec4(inPosition, 1.0));
     cameraPosition = transpose(ubo.cameraTrans)[3].xyz;
+    outColor = inColor;
+
+    tang = inTangent.xyz;
+    bitang = cross(normalize(inTangent.xyz), normalize(surfaceNormal)) * inTangent.w;
+
 }

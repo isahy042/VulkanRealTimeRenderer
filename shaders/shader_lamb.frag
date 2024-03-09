@@ -11,15 +11,53 @@ layout (binding = 1) uniform samplerCube specularTexture;
 layout (binding = 2) uniform samplerCube albedoTexture;
 layout (binding = 3) uniform samplerCube unusedTexture1;
 layout (binding = 4) uniform samplerCube unusedTexture2;
+layout (binding = 5) uniform samplerCube normalMap;
+layout (binding = 6) uniform samplerCube displacementMap;
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
 layout(location = 2) in vec3 cameraPosition;
+layout(location = 3) in vec4 inColor;
+layout(location = 4) in vec3 tang;
+layout(location = 5) in vec3 bitang;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec3 outColor;
+
+vec3 rgbe2rgb(vec4 rgbe) {
+    // Extract exponent
+    rgbe = rgbe * 255.0;
+    float exponent = rgbe.w;
+    // Convert RGBE to linear RGB' using the specified formula
+    return exp2(exponent - 128.0) * ((rgbe.xyz + 0.5)/256);
+}
+
+// Apply Reinhard tone mapping operator
+vec3 toneMapReinhard(vec3 linearRGB) {
+    float exposure = 1.0;
+    return linearRGB / (linearRGB + vec3(1.0)) * exposure;
+}
+
+float gammaEncode(float value) {
+    if (value <= 0.0031308) {
+        return 12.92 * value;
+    } else {
+        return 1.055 * pow(value, 1.0 / 2.4) - 0.055;
+    }
+}
+
+vec3 gammaEncode(vec3 color) {
+    return vec3(gammaEncode(color.r), gammaEncode(color.g), gammaEncode(color.b));
+}
 
 void main() {
     // I think this is right..?
-    outColor = texture(specularTexture, surfaceNormal) * texture(albedoTexture, surfaceNormal);
+    vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
+    vec3 newNormal = vec3(
+        (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 
+        (normalColor.x * tang.y) + (normalColor.y * bitang.y) +(normalColor.z * surfaceNormal.y),
+        (normalColor.x * tang.z) + (normalColor.y * bitang.z) +(normalColor.z * surfaceNormal.z));
+
+    vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * rgbe2rgb(texture(albedoTexture, newNormal));
+    outColor = toneMapReinhard(c);
 }
 

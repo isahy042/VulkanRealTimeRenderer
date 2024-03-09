@@ -7,10 +7,10 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 proj;
     mat4 cameraTrans;
 } ubo;
-layout (binding = 1) uniform samplerCube cubeMapTexture;
-layout (binding = 2) uniform samplerCube unusedTexture1;
-layout (binding = 3) uniform samplerCube unusedTexture2;
-layout (binding = 4) uniform samplerCube unusedTexture3;
+layout (binding = 1) uniform samplerCube albedoTexture;
+layout (binding = 2) uniform samplerCube roughnessTexture;
+layout (binding = 3) uniform samplerCube metalnessTexture;
+layout (binding = 4) uniform samplerCube mipmapTexture;
 layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
 
@@ -49,17 +49,11 @@ vec3 gammaEncode(vec3 color) {
     return vec3(gammaEncode(color.r), gammaEncode(color.g), gammaEncode(color.b));
 }
 
-
 void main() {
-    // just environment
-    vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
-    vec3 newNormal = vec3(
-        (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 
-        (normalColor.x * tang.y) + (normalColor.y * bitang.y) +(normalColor.z * surfaceNormal.y),
-        (normalColor.x * tang.z) + (normalColor.y * bitang.z) +(normalColor.z * surfaceNormal.z));
-
-    outColor = toneMapReinhard(rgbe2rgb(texture(cubeMapTexture, newNormal)));
+    float roughness = round(texture(roughnessTexture, surfaceNormal).x / 0.1) + 1;
+    float metalness = texture(metalnessTexture, surfaceNormal).x;
+    vec4 albedo = texture(albedoTexture, surfaceNormal);
+    vec4 c = textureLod(mipmapTexture, surfaceNormal, 1);
+    outColor = toneMapReinhard(rgbe2rgb(c));
 }
 
-// sources: 
-// https://learnopengl.com/Advanced-OpenGL/Cubemaps

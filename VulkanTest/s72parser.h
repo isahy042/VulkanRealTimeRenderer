@@ -165,10 +165,9 @@ public:
                         string name = "";
                         string normalMap = "";
                         string displacementMap = "";
-
-                        std::getline(file, line);
+                        getline(file, line);
                         name = line;
-                        std::getline(file, line);
+                        getline(file, line);
                         if (getName(line) == "normalMap") {
                             normalMap = line;
                             std::getline(file, line);
@@ -186,7 +185,7 @@ public:
                             while (line[0] != '}')
                             {
                                 mat->setValue(getName(line), getValue(line));
-                                std::getline(file, line);
+                                getline(file, line);
                             }
                             materials.push_back(mat);
                             s72map.push_back(make_pair(5, materials.size() - 1));
@@ -246,7 +245,6 @@ public:
         }
 
         // initialize cameras, drivers, meshes
-
         for (int i = 0; i<meshes.size(); i++) meshes[i].fillAttribute();
         for (int i = 0; i < cameras.size(); i++) cameras[i].initializeProjection();
         for (int i = 0; i < drivers.size(); i++) drivers[i].initializeData();
@@ -357,12 +355,6 @@ public:
         Vec44f m = generateTransformationMatrix(scales, trans, rotates);
         cameras[s72map[at].second].transformMatrix = m;
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(m));
-
-        view44(cameras[s72map[at].second].transformMatrix, "transmat \n");
-        view44(cameras[s72map[at].second].viewMatrix, "viewmat \n");
-        view44(cameras[s72map[at].second].projectionMatrix, "projmat \n");
-
-
 
         return 1;
 

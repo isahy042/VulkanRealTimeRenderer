@@ -188,7 +188,8 @@ public:
             infile.read(reinterpret_cast<char*>(&c2), sizeof(c2));
             infile.read(reinterpret_cast<char*>(&c3), sizeof(c3));
             infile.read(reinterpret_cast<char*>(&c4), sizeof(c4));
-            color.push_back(Vec4uc(c1, c2, c3, c4));
+            Vec4uc tempcolor = Vec4uc(c1, c2, c3, c4);
+            color.push_back(Vec4f(float(tempcolor.x)/255.f, float(tempcolor.y) / 255.f, float(tempcolor.z) / 255.f, float(tempcolor.w) / 255.f));
             v++;
         }
 
@@ -237,7 +238,7 @@ public:
     vector<Vec4f> tangent;
     vector<Vec2f> texcoord;
 
-    vector<Vec4uc> color;
+    vector<Vec4f> color;
 
     int material = -1;
 

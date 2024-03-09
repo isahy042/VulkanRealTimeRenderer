@@ -176,6 +176,18 @@ inline T dot(const Vec<N, T>& v1, const Vec<N, T>& v2)
     return t;
 }
 
+template <size_t N, typename T>
+inline T saturate(const Vec<N, T>& v1)
+{
+    Vec<N, T> v2;
+    for (size_t i = 0; i < N; ++i)
+    {
+        v2[i] = (v2[i] < 0) ? 0 : v2[i];
+        v2[i] = (v2[i] > 1) ? 1 : v2[i];
+    }
+    return v2;
+}
+
 /// Return the geometric length (\f$l_2\f$-norm) of the vector
 template <size_t N, typename T>
 T length(const Vec<N, T>& v) { return std::sqrt(dot(v, v)); }

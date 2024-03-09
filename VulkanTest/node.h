@@ -73,8 +73,14 @@ public:
         mesh = m;
         position = m.position; // this is supposed to be a deep copy
         normal = m.normal;
+
+        tangent = m.tangent;
+        texcoord = m.texcoord;
+        color = m.color;
+
         bbmin = m.bbmin;
         bbmax = m.bbmax;
+
         transformMatrix = identity44();
     }
 
@@ -96,7 +102,10 @@ public:
     Mesh mesh;
     vector<Vec3f> position;
     vector<Vec3f> normal;
-    vector<Vec3f> texCoord;
+    vector<Vec4f> tangent;
+    vector<Vec2f> texcoord;
+    vector<Vec4f> color;
+
 
     Vec3f bbmax;
     Vec3f bbmin;
