@@ -141,7 +141,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/env-cube.s72";
+	string s72filepath = "s72-main/examples/plants.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -291,16 +291,18 @@ private:
 	 
 		// testing this:
 		// TODO: not hardcode in the specular map for the environment cube.
-		//makeLambertianCubeMap("env-cube1.png");
+		//makeLambertianCubeMap("ocean-map.png");
 		//makeLambertianCubeMap("env-cube.png");
 
 		////makePBRCubeMap("env-cube.png", 1.f, 0);
 
 		//float roughness = 0.f;
-		//for (int r = 0; r < 11; r++) {
-		//	makePBRCubeMap("env-cube.png", roughness, r);
-		//	roughness += 0.1f;
+		//for (int r = 0; r < 6; r++) {
+		//	makePBRCubeMap("ocean-map.png", roughness, r);
+		//	roughness += 0.2f;
 		//}
+
+		//makePBRLUT();
 	}
 
 
@@ -310,7 +312,7 @@ private:
 		else if (glfwGetKey(window, GLFW_KEY_D)) scene.cameraMovement.x += 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_W)) scene.cameraMovement.y += 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.y -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.1f;
+		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.1f;
 
 		else if (glfwGetKey(window, GLFW_KEY_R)) scene.cameraMovement = Vec3f(0.f);
@@ -1126,7 +1128,7 @@ private:
 		}
 
 		// doing this for multiple vertex buffers!
-		//auto startTime = std::chrono::high_resolution_clock::now();
+		auto startTime = std::chrono::high_resolution_clock::now();
 		
 		// scene processing
 		scene.updateSceneTransformMatrix(currentFrameIndex);
@@ -1186,12 +1188,14 @@ private:
 				throw std::runtime_error("failed to present swap chain image!");
 			}
 			//recreateSwapChain();
-			//currentTime = std::chrono::high_resolution_clock::now();
-			//time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-			//cout << "\n record time: " << time;
+
 		
 		currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		auto time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		cout << "\n frame time: " << time;
 	}
 
 	void saveImg(string filename) {
@@ -1475,8 +1479,18 @@ private:
 		samplerLayoutBinding6.pImmutableSamplers = nullptr;
 		samplerLayoutBinding6.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		VkDescriptorSetLayoutBinding samplerLayoutBinding7{};
+		samplerLayoutBinding7.binding = 7;
+		samplerLayoutBinding7.descriptorCount = 1;
+		samplerLayoutBinding7.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding7.pImmutableSamplers = nullptr;
+		samplerLayoutBinding7.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		// TODO: displacement, normal.
-		std::array<VkDescriptorSetLayoutBinding, 7> bindings = { uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,samplerLayoutBinding3,samplerLayoutBinding4 ,samplerLayoutBinding5,samplerLayoutBinding6};
+		std::array<VkDescriptorSetLayoutBinding, 8> bindings = 
+		{ uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,
+			samplerLayoutBinding3 ,samplerLayoutBinding4 ,samplerLayoutBinding5,
+			samplerLayoutBinding6, samplerLayoutBinding7};
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1490,7 +1504,7 @@ private:
 
 	void createDescriptorPool() {
 
-		std::array<VkDescriptorPoolSize, 7> poolSizes{};
+		std::array<VkDescriptorPoolSize, 8> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1505,6 +1519,8 @@ private:
 		poolSizes[5].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[6].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[6].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[7].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[7].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 
 		VkDescriptorPoolCreateInfo poolInfo{};
@@ -1582,7 +1598,14 @@ private:
 				imageInfo6.imageView = textureImageView[materialIndex][5];
 				imageInfo6.sampler = textureSampler[materialIndex][5];
 
-				std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
+				//displacement
+				VkDescriptorImageInfo imageInfo7{};
+				imageInfo7.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo7.imageView = textureImageView[materialIndex][6];
+				imageInfo7.sampler = textureSampler[materialIndex][6];
+
+
+				std::array<VkWriteDescriptorSet, 8> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1639,6 +1662,14 @@ private:
 				descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				descriptorWrites[6].descriptorCount = 1;
 				descriptorWrites[6].pImageInfo = &imageInfo6;
+
+				descriptorWrites[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[7].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[7].dstBinding = 7;
+				descriptorWrites[7].dstArrayElement = 0;
+				descriptorWrites[7].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[7].descriptorCount = 1;
+				descriptorWrites[7].pImageInfo = &imageInfo7;
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
@@ -1790,10 +1821,10 @@ private:
 
 	void createCubeMapTextures(int materialIndex) {
 		string type = scene.materials[materialIndex]->getType();
-		textureImage[materialIndex].resize(6);
-		textureImageMemory[materialIndex].resize(6);
-		textureImageView[materialIndex].resize(6);
-		textureSampler[materialIndex].resize(6);
+		textureImage[materialIndex].resize(7);
+		textureImageMemory[materialIndex].resize(7);
+		textureImageView[materialIndex].resize(7);
+		textureSampler[materialIndex].resize(7);
 
 		if (type == "env") { // create environmet cube map.
 			//TODO: take both color AND filename. right now its only file name
@@ -1811,31 +1842,32 @@ private:
 		}
 		else if (type == "lamb") // 
 		{
-			createCubeMap("lambertian-map-env-cube.png", materialIndex, 0);
+			createCubeMap("lambertian-map-"+ scene.envMat->getBaseColor(), materialIndex, 0);
 			createCubeMap(scene.materials[materialIndex]->getBaseColor(), materialIndex, 1);
 			createCubeMap(unusedTextureFile, materialIndex, 2);
 			createCubeMap(unusedTextureFile, materialIndex, 3);
 		}
-		else if (type == "pbr") //
+		else if (type == "pbr") //pbr
 		{
 			createCubeMap(scene.materials[materialIndex]->getBaseColor(), materialIndex, 0);
 			createCubeMap(scene.materials[materialIndex]->getRoughness(), materialIndex, 1);
 			createCubeMap(scene.materials[materialIndex]->getMetalness(), materialIndex, 2);
-			createCubeMap(scene.envMat->getBaseColor(), materialIndex, 3);
+			createCubeMap(scene.envMat->getBaseColor(), materialIndex, 3, true);
 		}
 
 		// displacement and normal map.
 		createCubeMap(scene.materials[materialIndex]->getNormal(), materialIndex, 4);
 		createCubeMap(scene.materials[materialIndex]->getDisplacement(), materialIndex, 5);
+		create2DTexture("pbr-map.png", materialIndex, 6);
 	}
 
-	void createCubeMap(string filename, int matIndex, int category) {
-		createCubeMapTexture(filename, matIndex, category);
-		createCubeMapTextureView(matIndex, category);
-		createCubeMapSampler(matIndex, category);
+	void createCubeMap(string filename, int matIndex, int category, bool mipmap = false) {
+		createCubeMapTexture(filename, matIndex, category, mipmap);
+		createCubeMapTextureView(matIndex, category, mipmap);
+		createCubeMapSampler(matIndex, category, mipmap);
 	}
 
-	void createCubeMapTexture(string filename, int matIndex, int category) {
+	void createCubeMapTexture(string filename, int matIndex, int category, bool mipmap = false) {
 
 		int texWidth, texHeight, texChannels;
 		VkDeviceSize imageSize, layerSize;
@@ -1844,7 +1876,7 @@ private:
 
 		// the file name may also be a Vec3f of colors. In this case, generate 6x1 map.
 		// TODO:make this more rigid!!!
-		if (filename.substr(0, 1) == "[" || filename.substr(filename.size() - 1, 1) == "]") {
+		if (!mipmap && (filename.substr(0, 1) == "[" || filename.substr(filename.size() - 1, 1) == "]")) {
 			Vec3f color = tovec3f(filename);
 
 			texWidth = 1;
@@ -1858,7 +1890,7 @@ private:
 				pixels[(i * 4)] = (int)(color.x*255.f);
 				pixels[(i * 4)+1] = (int)(color.y * 255.f);
 				pixels[(i * 4)+2] = (int)(color.z * 255.f);
-				pixels[(i * 4)+3] = 128;
+				pixels[(i * 4)+3] = 129;
 			}
 
 			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
@@ -1871,10 +1903,18 @@ private:
 			vkUnmapMemory(device, stagingBufferMemory);
 
 			//TODO: free this.uc
-
 			//stbi_image_free(pixels);
+
+			createCubeMapImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[matIndex][category], textureImageMemory[matIndex][category], mipmap);
+
+			transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipmap);
+			copyBufferToCubeMapImage(stagingBuffer, textureImage[matIndex][category], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), mipmap);
+			transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipmap);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingBufferMemory, nullptr);
 		}
-		else {
+		else if (!mipmap) {
 			string sn = "s72-main/examples/" + filename;
 			const char* charArray = sn.c_str();
 			stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -1896,47 +1936,148 @@ private:
 			vkUnmapMemory(device, stagingBufferMemory);
 
 			stbi_image_free(pixels);
+
+			createCubeMapImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[matIndex][category], textureImageMemory[matIndex][category], mipmap);
+
+			transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipmap);
+			copyBufferToCubeMapImage(stagingBuffer, textureImage[matIndex][category], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), mipmap);
+			transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipmap);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingBufferMemory, nullptr);
+		}
+		else { // mipmap
+
+			// read in the 6 mipmaps
+			stbi_uc* mipmaps[6];
+
+			for (int l = 0; l < 6; l++) {
+				string sn = "s72-main/examples/pbr-map-" + to_string(l) + "-"+ filename;
+				const char* charArray = sn.c_str();
+				mipmaps[l] = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+				if (!mipmaps[l]) {
+					throw std::runtime_error("failed to load texture image for mipmap: " + sn);
+				}
+			}
+			
+			texWidth = 32;
+			texHeight = 32 * 6;
+			VkDeviceSize totalMipmapSize = 0;
+			VkDeviceSize mipmapLevelSize = texWidth * texHeight * 4;
+			for (int l = 0; l < 6; l++) {
+				totalMipmapSize += mipmapLevelSize;
+				mipmapLevelSize = mipmapLevelSize / 4;
+			}
+
+			cout << "\n total mipmap size: " << totalMipmapSize;
+			createBuffer(totalMipmapSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			// map memory
+			void* data;
+			vkMapMemory(device, stagingBufferMemory, 0, totalMipmapSize, 0, &data);
+
+			//https://satellitnorden.wordpress.com/2018/03/13/vulkan-adventures-part-4-the-mipmap-menace-mipmapping-tutorial/
+
+			texWidth = 32;
+			texHeight = 32 * 6;
+			mipmapLevelSize = texWidth * texHeight * 4;
+			VkDeviceSize currentOffset = 0;
+			for (int l = 0; l < 6; l++) {
+				memcpy(static_cast<byte*>(data) + currentOffset, mipmaps[l],
+					static_cast<size_t>(mipmapLevelSize));
+				currentOffset += mipmapLevelSize;
+				mipmapLevelSize = mipmapLevelSize / 4;
+			}
+
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			for (int l = 0; l < 6; l++) {
+				stbi_image_free(mipmaps[l]);
+			}
+
+			createCubeMapImage(32, 32*6, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[matIndex][category], textureImageMemory[matIndex][category], mipmap);
+
+			transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipmap);
+
+			copyBufferToCubeMapImage(stagingBuffer, textureImage[matIndex][category], static_cast<uint32_t>(32), static_cast<uint32_t>(32*6), mipmap);
+
+			transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipmap);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingBufferMemory, nullptr);
+			
 		}
 
-
-		createCubeMapImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[matIndex][category], textureImageMemory[matIndex][category]);
-
-		transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		copyBufferToCubeMapImage(stagingBuffer, textureImage[matIndex][category], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-		transitionCubeMapImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-		vkDestroyBuffer(device, stagingBuffer, nullptr);
-		vkFreeMemory(device, stagingBufferMemory, nullptr);
+		
 	}
 	
-	void copyBufferToCubeMapImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	void copyBufferToCubeMapImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, bool mipmap) {
+		if (!mipmap) {
+			VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
-		VkBufferImageCopy region{};
-		region.bufferOffset = 0;
-		region.bufferRowLength = 0;
-		region.bufferImageHeight = 0;
-		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = 0;
-		region.imageSubresource.layerCount = 6;
-		region.imageOffset = { 0, 0, 0 };
-		region.imageExtent = {
-			width,
-			height/6,
-			1
-		};
+			VkBufferImageCopy region{};
+			region.bufferOffset = 0;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = 0;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = 6;
+			region.imageOffset = { 0, 0, 0 };
+			region.imageExtent = {
+				width,
+				height / 6,
+				1
+			};
 
-		vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+			vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-		endSingleTimeCommands(commandBuffer);
+			endSingleTimeCommands(commandBuffer);
+		}
+		else {
+			vector<VkBufferImageCopy> bufferImageCopies;
+			bufferImageCopies.resize(6);
+
+			VkDeviceSize currentOffset = 0;
+			VkDeviceSize imgsize = 32 * 32 * 4 * 6;
+			for (int i = 0; i < 6; i++)
+			{
+			VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+				VkBufferImageCopy bufferImageCopy;
+
+				bufferImageCopy.bufferOffset = currentOffset;
+				bufferImageCopy.bufferRowLength = 0;
+				bufferImageCopy.bufferImageHeight = 0;
+				bufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				bufferImageCopy.imageSubresource.mipLevel = i;
+				bufferImageCopy.imageSubresource.baseArrayLayer = 0;
+				bufferImageCopy.imageSubresource.layerCount = 6;
+				bufferImageCopy.imageOffset = { 0, 0, 0 };
+				bufferImageCopy.imageExtent = { ((unsigned int)32) >> i, ((unsigned int)32) >> i, 1 };
+
+				bufferImageCopies[i] = bufferImageCopy;
+				
+				currentOffset += imgsize;
+				imgsize = imgsize / 4;
+
+				vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopies[i]);
+
+				endSingleTimeCommands(commandBuffer);
+			}
+
+			
+		}
+
+		
 	}
-	void createCubeMapTextureView(int matIndex, int category)
+	void createCubeMapTextureView(int matIndex, int category, bool mipmap = false)
 	{
-		textureImageView[matIndex][category] = createCubeMapImageView(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+		textureImageView[matIndex][category] = createCubeMapImageView(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipmap);
 	}
 
-	void createCubeMapSampler(int matIndex, int category) {
+	void createCubeMapSampler(int matIndex, int category, bool mipmap) {
 		VkPhysicalDeviceProperties properties{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
@@ -1949,6 +2090,7 @@ private:
 		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
 		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+		if (mipmap) samplerInfo.maxLod = 6.f;
 
 		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 		samplerInfo.unnormalizedCoordinates = VK_FALSE;
@@ -1961,7 +2103,7 @@ private:
 		}
 	}
 
-	VkImageView createCubeMapImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
+	VkImageView createCubeMapImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, bool isMipMap) {
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfo.image = image;
@@ -1969,7 +2111,8 @@ private:
 		viewInfo.format = format;
 		viewInfo.subresourceRange.aspectMask = aspectFlags;
 		viewInfo.subresourceRange.baseMipLevel = 0;
-		viewInfo.subresourceRange.levelCount = 1;
+		if (isMipMap) viewInfo.subresourceRange.levelCount = 6;
+		else viewInfo.subresourceRange.levelCount = 1;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 6;
 
@@ -1981,7 +2124,7 @@ private:
 		return imageView;
 	}
 
-	void createCubeMapImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+	void createCubeMapImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory, bool isMipMap) {
 
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1990,7 +2133,10 @@ private:
 		imageInfo.extent.width = width;
 		imageInfo.extent.height = height/6;
 		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = 1;
+
+		if (isMipMap) imageInfo.mipLevels = 6;
+		else imageInfo.mipLevels = 1;
+
 		imageInfo.arrayLayers = 6;
 		imageInfo.format = format;
 		imageInfo.tiling = tiling;
@@ -2019,7 +2165,7 @@ private:
 	}
 
 
-	void transitionCubeMapImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+	void transitionCubeMapImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, bool isMipMap) {
 		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
 		VkImageMemoryBarrier barrier{};
@@ -2031,7 +2177,8 @@ private:
 		barrier.image = image;
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1;
+		if (isMipMap) barrier.subresourceRange.levelCount = 6;
+		else barrier.subresourceRange.levelCount = 1;
 		barrier.subresourceRange.baseArrayLayer = 0;
 		barrier.subresourceRange.layerCount = 6;
 
@@ -2068,6 +2215,79 @@ private:
 		endSingleTimeCommands(commandBuffer);
 	}
 
+	// image texture
+	void create2DTexture(string filename, int matIndex, int category) {
+		createTextureImage(filename, matIndex, category);
+
+		createTextureImageView(filename, matIndex, category);
+
+		createTextureSampler(matIndex, category);
+
+	}
+
+	void createTextureSampler(int matIndex, int category) {
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+		VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
+		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler[matIndex][category]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create texture sampler!");
+		}
+	}
+
+	// texture 
+	void createTextureImage(string filename, int matIndex, int category) {
+		int texWidth, texHeight, texChannels;
+
+		string sn = "s72-main/examples/" + filename;
+		const char* charArray = sn.c_str();
+		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+		VkDeviceSize imageSize = texWidth * texHeight * 4;
+		VkDeviceSize layerSize = imageSize;
+
+		if (!pixels) {
+			throw std::runtime_error("failed to load texture image: " + filename);
+		}
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		// map memory
+		void* data;
+		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+		memcpy(data, pixels, static_cast<size_t>(imageSize));
+		vkUnmapMemory(device, stagingBufferMemory);
+		stbi_image_free(pixels);
+
+		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[matIndex][category], textureImageMemory[matIndex][category]);
+		transitionImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToImage(stagingBuffer, textureImage[matIndex][category], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+		transitionImageLayout(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+	
+	void createTextureImageView(string filename, int matIndex, int category)
+	{
+		textureImageView[matIndex][category] = createImageView(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+	}
+	
 	// depth
 	void createDepthResources() {
 		VkFormat depthFormat = findDepthFormat();
@@ -2267,7 +2487,7 @@ private:
 		cleanupSwapChain();
 
 		for (size_t i = 0; i < totalMaterials; i++) {
-			for (size_t j = 0; j < 6; j++) {
+			for (size_t j = 0; j < 7; j++) {
 				vkDestroySampler(device, textureSampler[i][j], nullptr);
 				vkDestroyImageView(device, textureImageView[i][j], nullptr);
 
@@ -2386,9 +2606,9 @@ int main(int argc, char* argv[]) {
 				}
 				else if (mode == "--gxx") {
 					float roughness = 0.f;
-					for (int r = 0; r < 11; r++) {
+					for (int r = 0; r < 6; r++) {
 						makePBRCubeMap(inFile, roughness, r);
-						roughness += 0.1f;
+						roughness += 0.2f;
 					}
 				}
 				else {

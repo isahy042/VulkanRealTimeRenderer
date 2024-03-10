@@ -13,6 +13,8 @@ layout (binding = 3) uniform samplerCube UnusedTexture3;
 layout (binding = 4) uniform samplerCube UnusedTexture4;
 layout (binding = 5) uniform samplerCube UnusedTexture5;
 layout (binding = 6) uniform samplerCube UnusedTexture6;
+layout (binding = 7) uniform sampler2D texSampler;
+
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;

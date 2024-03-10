@@ -92,7 +92,7 @@ public:
                 if (line.substr(2, 4) == "type")
                 {
                     string objName = line.substr(9, 5);
-                    cout << "finding object with name " << objName << "\n";
+                    //cout << "finding object with name " << objName << "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {

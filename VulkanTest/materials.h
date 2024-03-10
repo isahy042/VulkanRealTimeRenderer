@@ -421,6 +421,7 @@ void makeLambertianCubeMap(string inFilename) {
 
 	const char* inc = in.c_str();
 	stbi_uc* pixels = stbi_load(inc, &inWidth, &inHeight, &texChannels, STBI_rgb_alpha);
+	cout << inHeight << " " << inWidth;
 
 	if (inHeight / inWidth != 6) cerr << "please input image with correct dimension (wx6w)";
 	
@@ -438,7 +439,7 @@ void makeLambertianCubeMap(string inFilename) {
 	}
 
 	//  Vec4f, 2D vector to store new map
-	const int outWidth = 32;
+	const int outWidth = 40;
 	vector<vector<Vec4f>> outImg(outWidth * 6);
 	for (int h = 0; h < outWidth * 6; h++) {
 		outImg[h].resize(outWidth);
@@ -498,9 +499,9 @@ void makeLambertianCubeMap(string inFilename) {
 			else if (cubeIndex == 5) normal[0] -= dx;
 
 			Vec4f sampledColor = Vec4f(0.f);
-			int validNum = 10000;
+			int validNum = 2000;
 			
-			for (int s = 0; s < 10000; s++) {
+			for (int s = 0; s < 2000; s++) {
 				Vec3f scatterDir = randomOnUnitHemisphere(normal);
 				float cosineTheta = dot(normalize(scatterDir), normalize(normal));
 				if (cosineTheta <= 0) {
@@ -517,7 +518,7 @@ void makeLambertianCubeMap(string inFilename) {
 			}	
 
 			outImg[h][w] = 2 * sampledColor / (float)validNum;
-			//outImg[h][w].w = 0.502f;
+			outImg[h][w].w = 0.502;
 		}
 	}
 
@@ -527,11 +528,25 @@ void makeLambertianCubeMap(string inFilename) {
 	p = 0;
 	for (int h = 0; h < outWidth * 6; h++) {
 		for (int w = 0; w < outWidth; w++) {
-			
-			outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
-			outImgArr[(p * 4) + 1] =clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
-			outImgArr[(p * 4) + 2] = clip((int)floor((outImg[h][w].z * 255.f)), 0, 255);
-			outImgArr[(p * 4) + 3] = clip((int)floor((outImg[h][w].w * 255.f)), 0, 255);
+			// if not edge, blur.
+			if (w != 0 && w!= outWidth-1 && h % outWidth != 0 && (h+1) % outWidth != 0) {
+
+				Vec4f t = outImg[h][w];
+				/*(outImg[h - 1][w - 1] + outImg[h - 1][w] + outImg[h - 1][w + 1]
+						+ outImg[h][w - 1] + outImg[h][w] + outImg[h][w + 1] +
+						outImg[h + 1][w-1] + outImg[h + 1][w] + outImg[h+1][w + 1])/9.f;*/
+
+				outImgArr[(p * 4)] = clip((int)floor(t.x * 255.f), 0, 255);
+				outImgArr[(p * 4) + 1] = clip((int)floor(t.y * 255.f), 0, 255);
+				outImgArr[(p * 4) + 2] = clip((int)floor(t.z * 255.f), 0, 255);
+				outImgArr[(p * 4) + 3] = clip((int)floor(t.w * 255.f), 0, 255);
+			}
+			else {
+				outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 1] = clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 2] = clip((int)floor((outImg[h][w].z * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 3] = clip((int)floor((outImg[h][w].w * 255.f)), 0, 255);
+			}
 			p++;
 		}
 	}
@@ -573,6 +588,7 @@ Vec3f ImportanceSampleGGX(Vec2f Xi, float Roughness, Vec3f N)
 
 // helper functions for material cubemap parsing.
 void makePBRCubeMap(string inFilename, float roughness, int index) {
+	cout << "\n generating cube map for file " << inFilename << " at roughness " << roughness;
 	int inWidth, inHeight, texChannels;
 	string in = "s72-main/examples/" + inFilename;
 	string outFilename = "pbr-map-" + to_string(index) + "-" + inFilename;
@@ -581,7 +597,7 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 	stbi_uc* pixels = stbi_load(inc, &inWidth, &inHeight, &texChannels, STBI_rgb_alpha);
 
 	if (inHeight / inWidth != 6) cerr << "please input image with correct dimension (wx6w)";
-	cout << "\n generating cube map for file " << inFilename << " at roughness " << roughness;
+	
 	// store in Vec4f, 2D vector
 	vector<vector<Vec4f>> inImg(inHeight, vector<Vec4f>(inWidth, Vec4f(0.f)));
 
@@ -595,7 +611,8 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 	}
 
 	//  Vec4f, 2D vector to store new map
-	const int outWidth = 32;
+	int outWidth = 32 / int(pow(2, index));
+
 	vector<vector<Vec4f>> outImg(outWidth * 6);
 	for (int h = 0; h < outWidth * 6; h++) {
 		outImg[h].resize(outWidth);
@@ -658,7 +675,7 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 			Vec3f viewing = normal;
 			float totalWeight = 0;
 
-			for (int s = 0; s < 2000; s++) {
+			for (int s = 0; s < 1000; s++) {
 
 				Vec2f Xi = Vec2f(randf(), randf());
 				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal);
@@ -686,10 +703,9 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 			//outImg[h][w].w = 1.f;
 		}
 	}
+	
 
-
-	stbi_uc outImgArr[outWidth * outWidth * 4 * 6];
-
+	stbi_uc outImgArr[32 * 32 * 4 * 6]; // allocate this for now, may not use whole array
 	p = 0;
 	for (int h = 0; h < outWidth * 6; h++) {
 		for (int w = 0; w < outWidth; w++) {
@@ -705,6 +721,92 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 	string on = "s72-main/examples/" + outFilename;
 	const char* onc = on.c_str();
 	//stbi__create_png_image();
+
 	stbi_write_png(onc, outWidth, outWidth * 6, 4, outImgArr, 4 * outWidth);
+}
+
+// is this right???
+float G_Smith(float Roughness, float NoV, float NoL) {
+	float k = (Roughness + 1) * (Roughness + 1) / 8.0f;
+	float G_V = NoV / (NoV * (1.0f - k) + k);
+	float G_L = NoL / (NoL * (1.0f - k) + k);
+	return G_V * G_L;
+}
+
+void makePBRLUT() {
+	string outFilename = "pbr-map.png";
+
+	//  Vec4f, 2D vector to store new map
+	int outWidth = 32;
+
+	vector<vector<Vec4f>> outImg(outWidth);
+	for (int h = 0; h < outWidth; h++) {
+		outImg[h].resize(outWidth);
+	}
+
+	Vec3f V;
+	Vec3f normal = Vec3f(0, 0, 1);
+	float roughness = 0.f;
+	float roughnessIncrement = (1 / (outWidth - 1));
+	float NoV = 0.f;
+	float NoVIncrement = (2 * 3.1415926 / (outWidth - 1));
+
+	for (int h = 0; h < outWidth; h++) {
+		for (int w = 0; w < outWidth; w++) {
+			V.x = sqrt(1.0f - NoV * NoV); // sin
+			V.y = 0;
+			V.z = NoV; // cos
+
+			float A = 0;
+			float B = 0;
+
+			for (int s = 0; s < 1000; s++) {
+
+				Vec2f Xi = Vec2f(randf(), randf());
+				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal);
+				Vec3f L = 2 * dot(V, H) * H - V;
+
+				float NoL = clamp(L.z,0.f,1.f);
+				float NoH = clamp(H.z, 0.f, 1.f);
+				float VoH = clamp(dot(V, H), 0.f, 1.f);
+
+				if (NoL > 0)
+				{
+					float G = G_Smith(roughness, NoV, NoL);
+					float G_Vis = G * VoH / (NoH * NoV);
+					float Fc = pow(1 - VoH, 5);
+					A += (1 - Fc) * G_Vis;
+					B += Fc * G_Vis;
+				}
+
+			}
+
+			Vec2f finalSamples = Vec2f(A, B) / 1000;
+			outImg[h][w] = Vec4f(finalSamples.x, finalSamples.y, 0.f,0.f);
+			NoV += NoVIncrement;
+		}
+		NoV = 0.f;
+		roughness += roughnessIncrement;
+	}
+	
+
+	stbi_uc outImgArr[32 * 4 * 32]; // allocate this for now, may not use whole array
+	int p = 0;
+	for (int h = 0; h < outWidth; h++) {
+		for (int w = 0; w < outWidth; w++) {
+
+			outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
+			outImgArr[(p * 4) + 1] = clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
+			outImgArr[(p * 4) + 2] = 0;
+			outImgArr[(p * 4) + 3] = 255;
+			p++;
+		}
+	}
+
+	string on = "s72-main/examples/" + outFilename;
+	const char* onc = on.c_str();
+	//stbi__create_png_image();
+
+	stbi_write_png(onc, outWidth, outWidth, 4, outImgArr, 4 * outWidth);
 
 }

@@ -13,6 +13,8 @@ layout (binding = 3) uniform samplerCube metalnessTexture;
 layout (binding = 4) uniform samplerCube mipmapTexture;
 layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
+layout (binding = 7) uniform sampler2D texSampler;
+
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -25,6 +27,8 @@ layout(location = 0) out vec3 outColor;
 
 vec3 rgbe2rgb(vec4 rgbe) {
     // Extract exponent
+    if (rgbe.x + rgbe.y + rgbe.z + rgbe.w == 0) return vec3(0.0);
+
     rgbe = rgbe * 255;
     int exponent = int(floor(rgbe.w));
     // Convert RGBE to linear RGB' using the specified formula
@@ -50,10 +54,18 @@ vec3 gammaEncode(vec3 color) {
 }
 
 void main() {
-    float roughness = round(texture(roughnessTexture, surfaceNormal).x / 0.1) + 1;
-    float metalness = texture(metalnessTexture, surfaceNormal).x;
-    vec4 albedo = texture(albedoTexture, surfaceNormal);
-    vec4 c = textureLod(mipmapTexture, surfaceNormal, 1);
-    outColor = toneMapReinhard(rgbe2rgb(c));
+    float roughness = gammaEncode(texture(roughnessTexture, surfaceNormal).xyz).x;
+    float metalness = gammaEncode(texture(metalnessTexture, surfaceNormal).xyz).x;
+    vec3 albedo =  rgbe2rgb(texture(albedoTexture, surfaceNormal));
+
+    vec3 I = cameraPosition - position;
+    float NoV = clamp(dot(surfaceNormal, I), 0.5, 1.0);
+    vec3 R = 2 * dot(surfaceNormal, I) * surfaceNormal - I;
+
+    vec3 PrefilteredColor = rgbe2rgb(textureLod(mipmapTexture, surfaceNormal, roughness/0.2));
+    vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(roughness, NoV)).xyz).xy;
+    vec3 c = PrefilteredColor * ( albedo * EnvBRDF.x + EnvBRDF.y );
+
+    outColor = (textureLod(mipmapTexture, surfaceNormal, roughness/0.2).xyz) * NoV;
 }
 

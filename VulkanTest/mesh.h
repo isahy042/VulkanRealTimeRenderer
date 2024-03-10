@@ -183,6 +183,10 @@ public:
                 infile.read(reinterpret_cast<char*>(&f2), sizeof(f2));
                 texcoord.push_back(Vec2f(f1, f2));
             }
+            else {
+                tangent.push_back(Vec4f(0.f));
+                texcoord.push_back(Vec2f(0.f));
+            }
             // color
             infile.read(reinterpret_cast<char*>(&c1), sizeof(c1));
             infile.read(reinterpret_cast<char*>(&c2), sizeof(c2));

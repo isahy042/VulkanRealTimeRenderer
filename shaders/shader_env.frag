@@ -13,6 +13,7 @@ layout (binding = 3) uniform samplerCube unusedTexture2;
 layout (binding = 4) uniform samplerCube unusedTexture3;
 layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
+layout (binding = 7) uniform sampler2D texSampler;
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -24,10 +25,12 @@ layout(location = 5) in vec3 bitang;
 layout(location = 0) out vec3 outColor;
 
 vec3 rgbe2rgb(vec4 rgbe) {
+    if (rgbe.x + rgbe.y + rgbe.z + rgbe.w == 0) return vec3(0.0);
     // Extract exponent
     rgbe = rgbe * 255;
     int exponent = int(floor(rgbe.w));
     // Convert RGBE to linear RGB' using the specified formula
+    
     return exp2(exponent - 128) * ((rgbe.xyz + 0.5)/256);
 }
 
@@ -59,6 +62,7 @@ void main() {
         (normalColor.x * tang.z) + (normalColor.y * bitang.z) +(normalColor.z * surfaceNormal.z));
 
     outColor = toneMapReinhard(rgbe2rgb(texture(cubeMapTexture, newNormal)));
+    //outColor = texture(cubeMapTexture, newNormal);
 }
 
 // sources: 

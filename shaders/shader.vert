@@ -22,6 +22,7 @@ layout(location = 4) out vec3 tang;
 layout(location = 5) out vec3 bitang;
 
 
+
 void main() {
     gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
     surfaceNormal = mat3(transpose(inverse(ubo.model))) * inNormal;
@@ -30,7 +31,7 @@ void main() {
     cameraPosition = transpose(ubo.cameraTrans)[3].xyz;
     outColor = inColor;
 
-    tang = inTangent.xyz;
+    tang =  mat3(transpose(inverse(ubo.model))) * inTangent.xyz;
     bitang = cross(normalize(inTangent.xyz), normalize(surfaceNormal)) * inTangent.w;
 
 }

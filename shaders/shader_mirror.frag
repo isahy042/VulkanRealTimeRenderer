@@ -13,6 +13,8 @@ layout (binding = 3) uniform samplerCube unusedTexture2;
 layout (binding = 4) uniform samplerCube unusedTexture3;
 layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
+layout (binding = 7) uniform sampler2D texSampler;
+
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -62,6 +64,8 @@ void main() {
     vec3 I = cameraPosition - position;
     vec3 R = reflect(normalize(I), normalize(newNormal));
     outColor = toneMapReinhard(rgbe2rgb(texture(cubeMapTexture, R)));
+    //outColor = texture(cubeMapTexture, R).xyz;
+
 }
 
 // sources: 
