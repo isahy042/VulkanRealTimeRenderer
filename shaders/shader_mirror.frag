@@ -26,6 +26,8 @@ layout(location = 5) in vec3 bitang;
 layout(location = 0) out vec3 outColor;
 
 vec3 rgbe2rgb(vec4 rgbe) {
+    if (rgbe.x + rgbe.y + rgbe.z + rgbe.w == 0) return vec3(0.0);
+
     // Extract exponent
     rgbe = rgbe * 255;
     int exponent = int(floor(rgbe.w));

@@ -141,7 +141,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/plants.s72";
+	string s72filepath = "s72-main/examples/env-cube.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -294,11 +294,11 @@ private:
 		//makeLambertianCubeMap("ocean-map.png");
 		//makeLambertianCubeMap("env-cube.png");
 
-		////makePBRCubeMap("env-cube.png", 1.f, 0);
+		//////makePBRCubeMap("env-cube.png", 1.f, 0);
 
 		//float roughness = 0.f;
 		//for (int r = 0; r < 6; r++) {
-		//	makePBRCubeMap("ocean-map.png", roughness, r);
+		//	makePBRCubeMap("env-cube.png", roughness, r);
 		//	roughness += 0.2f;
 		//}
 
