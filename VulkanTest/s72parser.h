@@ -49,6 +49,8 @@ public:
     Camera *currCam;
     Vec2i env = Vec2i(-1,-1); // index of node, index in the material vector
     Vec3f cameraMovement = Vec3f(0.f);
+    Vec4f cameraRot = Vec4f(0.f, 0.f, 0.f, 1.f);
+
     bool updateFrustum = true;
 
     vector<Node> nodes;
@@ -92,7 +94,7 @@ public:
                 if (line.substr(2, 4) == "type")
                 {
                     string objName = line.substr(9, 5);
-                    //cout << "finding object with name " << objName << "\n";
+                   // cout << "finding object with name " << objName << "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {
@@ -246,10 +248,13 @@ public:
 
         // initialize cameras, drivers, meshes
         for (int i = 0; i<meshes.size(); i++) meshes[i].fillAttribute();
+
         for (int i = 0; i < cameras.size(); i++) cameras[i].initializeProjection();
+
         for (int i = 0; i < drivers.size(); i++) drivers[i].initializeData();
 
         currCam = &cameras[preferredCameraIndex];
+
         return cameras[preferredCameraIndex].aspect;
     }
 
@@ -432,6 +437,7 @@ public:
 
     void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
         Vec44f m = generateTransformationMatrix(scales, trans, rotates);
+        m = matmul4444(quaternionToMatrix4(normalize(cameraRot)), m);
         cameras[s72map[at].second].transformMatrix = matmul4444(transToMatrix4(cameraMovement), m);
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
         if (updateFrustum) cameras[s72map[at].second].applyTrasformation();
@@ -487,4 +493,5 @@ public:
 
         return transformation;
     }
+
     };

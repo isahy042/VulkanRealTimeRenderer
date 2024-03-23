@@ -58,14 +58,24 @@ void main() {
     float metalness = gammaEncode(texture(metalnessTexture, surfaceNormal).xyz).x;
     vec3 albedo =  rgbe2rgb(texture(albedoTexture, surfaceNormal));
 
-    vec3 I = cameraPosition - position;
-    float NoV = clamp(dot(surfaceNormal, I), 0.5, 1.0);
-    vec3 R = 2 * dot(surfaceNormal, I) * surfaceNormal - I;
+    vec3 I = position - cameraPosition;
+    float NoV = clamp(dot(normalize(surfaceNormal), normalize(I)), 0.5, 1.0); //cosine theta
+    //vec3 R = 2 * dot(surfaceNormal, I) * surfaceNormal - I; // reflecting I.
+    vec3 reflected = reflect(normalize(I), normalize(surfaceNormal));
 
-    vec3 PrefilteredColor = rgbe2rgb(textureLod(mipmapTexture, surfaceNormal, roughness/0.2));
+    vec3 PrefilteredColor = rgbe2rgb(textureLod(mipmapTexture, reflected, roughness/0.2));
+
     vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(roughness, NoV)).xyz).xy;
     vec3 c = PrefilteredColor * ( albedo * EnvBRDF.x + EnvBRDF.y );
 
-    outColor = (textureLod(mipmapTexture, surfaceNormal, roughness/0.2).xyz) * NoV;
+    // outColor = PrefilteredColor;//(textureLod(mipmapTexture, surfaceNormal, roughness/0.2).xyz) * NoV;
+
+    // vec3 I = position - cameraPosition;
+    // vec3 R = reflect(normalize(I), normalize(surfaceNormal));
+    //outColor = toneMapReinhard(rgbe2rgb(textureLod(mipmapTexture, reflected, roughness/0.2)));
+
+    outColor = (textureLod(mipmapTexture, reflected, roughness/0.2).xyz) * NoV;
+
+
 }
 

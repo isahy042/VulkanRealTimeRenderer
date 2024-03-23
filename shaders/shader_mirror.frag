@@ -63,7 +63,7 @@ void main() {
         (normalColor.x * tang.z) + (normalColor.y * bitang.z) +(normalColor.z * surfaceNormal.z));
 
 
-    vec3 I = cameraPosition - position;
+    vec3 I = position - cameraPosition;
     vec3 R = reflect(normalize(I), normalize(newNormal));
     outColor = toneMapReinhard(rgbe2rgb(texture(cubeMapTexture, R)));
     //outColor = texture(cubeMapTexture, R).xyz;

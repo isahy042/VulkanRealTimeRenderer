@@ -518,7 +518,7 @@ void makeLambertianCubeMap(string inFilename) {
 			}	
 
 			outImg[h][w] = 2 * sampledColor / (float)validNum;
-			outImg[h][w].w = 0.502;
+			//outImg[h][w].w = 0.502;
 		}
 	}
 
@@ -531,10 +531,9 @@ void makeLambertianCubeMap(string inFilename) {
 			// if not edge, blur.
 			if (w != 0 && w!= outWidth-1 && h % outWidth != 0 && (h+1) % outWidth != 0) {
 
-				Vec4f t = outImg[h][w];
-				/*(outImg[h - 1][w - 1] + outImg[h - 1][w] + outImg[h - 1][w + 1]
+				Vec4f t = (outImg[h - 1][w - 1] + outImg[h - 1][w] + outImg[h - 1][w + 1]
 						+ outImg[h][w - 1] + outImg[h][w] + outImg[h][w + 1] +
-						outImg[h + 1][w-1] + outImg[h + 1][w] + outImg[h+1][w + 1])/9.f;*/
+						outImg[h + 1][w-1] + outImg[h + 1][w] + outImg[h+1][w + 1])/9.f;
 
 				outImgArr[(p * 4)] = clip((int)floor(t.x * 255.f), 0, 255);
 				outImgArr[(p * 4) + 1] = clip((int)floor(t.y * 255.f), 0, 255);
@@ -557,17 +556,6 @@ void makeLambertianCubeMap(string inFilename) {
 	stbi_write_png(onc, outWidth, outWidth * 6, 4, outImgArr, 4 * outWidth);
 
 }
-
-
-// Make mipmap levels for pbr
-// combine mipmap with shaders to achieve the effect
-// support normal maps
-// tone mapping
-// complete rest of normal map support
-// create scene
-// write report
-// analyze run time
-// 
 
 //https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
 Vec3f ImportanceSampleGGX(Vec2f Xi, float Roughness, Vec3f N)
@@ -678,7 +666,7 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 			for (int s = 0; s < 1000; s++) {
 
 				Vec2f Xi = Vec2f(randf(), randf());
-				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal);
+				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal); // importance sample a direccti
 				Vec3f scatterDir = 2 * dot(viewing, H) * H - viewing;
 
 				Vec2f index = getIndexForCubeMap(scatterDir);

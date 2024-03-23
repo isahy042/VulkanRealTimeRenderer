@@ -141,7 +141,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/env-cube.s72";
+	string s72filepath = "s72-main/examples/env-sphere.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -294,13 +294,13 @@ private:
 		//makeLambertianCubeMap("ocean-map.png");
 		//makeLambertianCubeMap("env-cube.png");
 
-		//////makePBRCubeMap("env-cube.png", 1.f, 0);
+		//makePBRCubeMap("env-cube.png", 1.f, 0);
 
-		//float roughness = 0.f;
-		//for (int r = 0; r < 6; r++) {
-		//	makePBRCubeMap("env-cube.png", roughness, r);
-		//	roughness += 0.2f;
-		//}
+		float roughness = 0.f;
+		for (int r = 0; r < 6; r++) {
+			makePBRCubeMap("env-cube.png", roughness, r);
+			roughness += 0.2f;
+		}
 
 		//makePBRLUT();
 	}
@@ -314,6 +314,11 @@ private:
 		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.y -= 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.1f;
+
+		else if (glfwGetKey(window, GLFW_KEY_RIGHT)) scene.cameraRot.y += 0.01f;
+		else if (glfwGetKey(window, GLFW_KEY_LEFT)) scene.cameraRot.y -= 0.01f;
+		else if (glfwGetKey(window, GLFW_KEY_DOWN)) scene.cameraRot.x += 0.01f;
+		else if (glfwGetKey(window, GLFW_KEY_UP)) scene.cameraRot.x -= 0.01f;
 
 		else if (glfwGetKey(window, GLFW_KEY_R)) scene.cameraMovement = Vec3f(0.f);
 
@@ -1195,7 +1200,7 @@ private:
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		auto time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-		cout << "\n frame time: " << time;
+		//cout << "\n frame time: " << time;
 	}
 
 	void saveImg(string filename) {
