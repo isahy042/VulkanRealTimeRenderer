@@ -7,6 +7,7 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 proj;
     mat4 cameraTrans;
 } ubo;
+
 layout (binding = 1) uniform samplerCube specularTexture;
 layout (binding = 2) uniform samplerCube albedoTexture;
 layout (binding = 3) uniform samplerCube unusedTexture1;
@@ -15,10 +16,20 @@ layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
 layout (binding = 7) uniform sampler2D texSampler;
 
-layout(binding = 8) uniform LightObject {
+layout(binding = 8) uniform LightObject1 {
     mat4 model;
     mat4 data;
-} light;
+} sphereLight[10];
+
+layout(binding = 9) uniform LightObject2 {
+    mat4 model;
+    mat4 data;
+} spotLight[10];
+
+layout(binding = 10) uniform LightObject3 {
+    mat4 model;
+    mat4 data;
+} sunLight[5];
 
 
 layout(location = 0) in vec3 surfaceNormal;
@@ -59,7 +70,9 @@ vec3 gammaEncode(vec3 color) {
 }
 
 void main() {
-    // I think this is right..?
+    for (int i = 0; i<3; i++){
+        break;
+    }
     vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
     vec3 newNormal = vec3(
         (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 

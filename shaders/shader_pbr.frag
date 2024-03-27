@@ -15,6 +15,20 @@ layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
 layout (binding = 7) uniform sampler2D texSampler;
 
+layout(binding = 8) uniform LightObject1 {
+    mat4 model;
+    mat4 data;
+} sphereLight[10];
+
+layout(binding = 9) uniform LightObject2 {
+    mat4 model;
+    mat4 data;
+} spotLight[10];
+
+layout(binding = 10) uniform LightObject3 {
+    mat4 model;
+    mat4 data;
+} sunLight[5];
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;

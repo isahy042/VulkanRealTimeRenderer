@@ -16,12 +16,10 @@ layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
 layout (binding = 7) uniform sampler2D texSampler;
 
-layout(binding = 0) uniform LightObject {
+layout(binding = 8) uniform LightObject {
     mat4 model;
-    mat4 view;
-    mat4 proj;
-    mat4 cameraTrans;
-} light;
+    mat4 data;
+} light[5];
 
 
 layout(location = 0) in vec3 surfaceNormal;
@@ -63,7 +61,6 @@ vec3 gammaEncode(vec3 color) {
 
 
 void main() {
-
     vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
     vec3 newNormal = vec3(
         (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 

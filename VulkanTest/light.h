@@ -17,6 +17,9 @@ public:
     virtual ~Light() {}
     virtual void setValue(string n, string val) {};
     virtual void setTransformationMatrix(Vec44f m) {};
+    virtual Vec44f getTransformationMatrix() { return Vec44f(Vec4f(0.f)); };
+    virtual Vec44f getDataMatrix() { return Vec44f(Vec4f(0.f)); };
+    virtual int getType() { return -1; };
 };
 
 class Sun : public Light {
@@ -25,7 +28,7 @@ public:
     Vec3f tint = Vec3f(1.f);
     Vec3f pos = Vec3f(0.f);
     Vec44f transMat = Vec44f(Vec4f(0.f));
-    int type = 0;
+    int type = 2;
 
     float angle;
     float strength;
@@ -59,6 +62,17 @@ public:
         pos = transformPos(m, Vec3f(0.f));
         transMat = m;
     }
+    Vec44f getTransformationMatrix() override {
+        return transMat;
+    }
+    Vec44f getDataMatrix() override {
+        return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z), 
+            Vec4f(shadow, angle, strength, 0.f), 
+            Vec4f(0.f), 
+            Vec4f(0.f));
+    }
+    int getType() override { return type; };
+
 };
 
 class Sphere : public Light {
@@ -69,12 +83,12 @@ public:
     Vec44f transMat = Vec44f(Vec4f(0.f));
 
 
-    int type = 1;
+    int type = 0;
     int shadow = 0;
 
     float radius;
     float power;
-    float limit;
+    float limit = 1.f;
 
 
     void setValue(string n, string val) override
@@ -108,6 +122,17 @@ public:
         pos = transformPos(m, Vec3f(0.f));
         transMat = m;
     }
+    Vec44f getTransformationMatrix() override {
+        return transMat;
+    }
+    Vec44f getDataMatrix() override {
+        return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z),
+            Vec4f(shadow, radius, power, limit),
+            Vec4f(0.f),
+            Vec4f(0.f));
+    }
+    int getType() override { return type; };
+
 };
 
 class Spot : public Light {
@@ -118,12 +143,12 @@ public:
     Vec44f transMat = Vec44f(Vec4f(0.f));
 
 
-    int type = 2;
+    int type = 1;
     int shadow = 0;
 
     float radius;
     float power;
-    float limit;
+    float limit = 1.f;
     float fov;
     float blend;
 
@@ -166,4 +191,15 @@ public:
         pos = transformPos(m, Vec3f(0.f));
         transMat = m;
     }
+    Vec44f getTransformationMatrix() override {
+        return transMat;
+    }
+    Vec44f getDataMatrix() override {
+        return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z),
+            Vec4f(shadow,radius, power, limit),
+            Vec4f(fov, blend, 0.f,0.f),
+            Vec4f(0.f));
+    }
+    int getType() override { return type; };
+
 };

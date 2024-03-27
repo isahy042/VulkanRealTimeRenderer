@@ -482,13 +482,12 @@ public:
         else {
             rotates.push_back(n.rotate);
         }
-        //scales.push_back(n.scale);
-        //rotates.push_back(n.rotate);
-        //trans.push_back(n.translate);
 
-        if (n.camera > 0) updateCameraTransformMatrix(n.camera, scales, trans, rotates);
+        Vec44f transMatrix = generateTransformationMatrix(scales, trans, rotates);
+        if (n.camera > 0) updateCameraTransformMatrix(n.camera, transMatrix);
+        if (n.light > 0) updateLightTransformMatrix(n.light, transMatrix);
         if (n.mesh > 0) { 
-            updateMeshTransformMatrix(root, time, scales, trans, rotates); 
+            updateMeshTransformMatrix(root, time, transMatrix);
 
             nodes[s72map[root].second].bbmin.x = min(nodes[s72map[root].second].bbmin.x, objects[nodeToObj[root]].bbmin.x);
             nodes[s72map[root].second].bbmin.y = min(nodes[s72map[root].second].bbmin.y, objects[nodeToObj[root]].bbmin.y);
@@ -517,18 +516,21 @@ public:
         
     }
 
-    void updateCameraTransformMatrix(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
-        Vec44f m = generateTransformationMatrix(scales, trans, rotates);
-        m = matmul4444(quaternionToMatrix4(normalize(cameraRot)), m);
+    void updateCameraTransformMatrix(int at, Vec44f tm) {
+        Vec44f m = matmul4444(quaternionToMatrix4(normalize(cameraRot)),tm);
         cameras[s72map[at].second].transformMatrix = matmul4444(transToMatrix4(cameraMovement), m);
         cameras[s72map[at].second].viewMatrix = transpose44(invert44(cameras[s72map[at].second].transformMatrix));
         if (updateFrustum) cameras[s72map[at].second].applyTrasformation();
     }
 
-    void updateMeshTransformMatrix(int nodeAt, int time, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    void updateLightTransformMatrix(int at, Vec44f tm) {
+        lights[s72map[at].second]->setTransformationMatrix(tm);
+    }
+
+    void updateMeshTransformMatrix(int nodeAt, int time, Vec44f tm) {
         // get obj index
         int index = nodeToObj[nodeAt];
-        objects[index].transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        objects[index].transformMatrix = tm;
         objects[index].updateBoundingBox();
     }
     
@@ -536,7 +538,6 @@ public:
         for (int& root : roots) {
             cullNode(root, true);
         }
-
         return 1;
     }
 

@@ -38,7 +38,11 @@ using namespace std;
 
 uint32_t WIDTH = 800;
 uint32_t HEIGHT = 600;
+
 const int TEXTURE_COUNT = 7;
+const int MAX_LIGHT = 10;
+const int MAX_SUN_LIGHT = 5;
+
 bool adjustDimension = true;
 
 const string currRepo = ""; // for some reason this needs to be added manually :(
@@ -128,7 +132,6 @@ struct Vertex {
 
 // structures for each type of light.
 struct LightObject {
-	// std430 in the layout qualifier
 	alignas(16) float model[16]; 
 	alignas(16) float data[16];
 };
@@ -221,9 +224,18 @@ private:
 	vector<vector<VkDeviceMemory>> uniformBuffersMemory;
 	vector<vector<void*>> uniformBuffersMapped;
 
-	vector<vector<VkBuffer>> lightBuffers;
-	vector<vector<VkDeviceMemory>> lightBuffersMemory;
-	vector<vector<void*>> lightBuffersMapped;
+	// light buffers
+	vector < vector<vector<VkBuffer>>> sunlightBuffers;
+	vector < vector<vector<VkDeviceMemory>>> sunlightBuffersMemory;
+	vector < vector<vector<void*>>> sunlightBuffersMapped;
+
+	vector < vector<vector<VkBuffer>>> spherelightBuffers;
+	vector < vector<vector<VkDeviceMemory>>> spherelightBuffersMemory;
+	vector < vector<vector<void*>>> spherelightBuffersMapped;
+
+	vector < vector<vector<VkBuffer>>> spotlightBuffers;
+	vector < vector<vector<VkDeviceMemory>>> spotlightBuffersMemory;
+	vector < vector<vector<void*>>> spotlightBuffersMapped;
 
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
@@ -1126,17 +1138,66 @@ private:
 	}
 
 	void updateLightBuffer(uint32_t currentImage, int objIndex) {
-		//static auto startTime = std::chrono::high_resolution_clock::now();
+		// for now, put all light in all light buffers.
+		int sphereind = 0;
+		int spotind = 0;
+		int sunind = 0;
 
-		//auto currentTime = std::chrono::high_resolution_clock::now();
-		//float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		// copying all lights
+		for (int i = 0; i < scene.lights.size(); i++) {
 
+			shared_ptr<Light> light = scene.lights[i];
+
+			// copy data to light object
+			LightObject l{};
+			std::memcpy(l.model, makeUboMatrix(transpose44(light->getTransformationMatrix())), 16 * sizeof(float));
+			std::memcpy(l.data, makeUboMatrix(light->getDataMatrix()), 16 * sizeof(float));
+			
+			if (light->getType() == 0 && sphereind < MAX_LIGHT) { //sphere
+				/*cout << "\n showing sphere light at " << i;
+				view44(light->getTransformationMatrix(), "\n trans");
+				view44(light->getDataMatrix(), "\n data");*/
+
+				memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
+				sphereind++;
+			}
+			else if (light->getType() == 1 && spotind < MAX_LIGHT) { //spot
+				/*cout << "\n showing spot light at " << i;
+				view44(light->getTransformationMatrix(), "\n trans");
+				view44(light->getDataMatrix(), "\n data");*/
+
+				memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
+				spotind++;
+			}
+			else if (light->getType() == 2 && sunind < MAX_SUN_LIGHT) { // sun
+				/*cout << "\n showing sun light at " << i;
+				view44(light->getTransformationMatrix(), "\n trans");
+				view44(light->getDataMatrix(), "\n data");*/
+
+				memcpy(sunlightBuffersMapped[objIndex][currentImage][sunind], &l, sizeof(l));
+				sunind++;
+			}
+			else {
+				cerr << "\n unsupported light type encountered when updating light buffer.";
+			}
+		}
+
+		// tell the shader when to stop.
+		float* notUsedLight = makeUboMatrix(Vec44f(Vec4f(0.f)));
 		LightObject l{};
+		std::memcpy(l.model, notUsedLight, 16 * sizeof(float));
+		std::memcpy(l.data, notUsedLight, 16 * sizeof(float));
 
-		std::memcpy(l.model, makeUboMatrix(transpose44(scene.objects[objIndex].transformMatrix)), 16 * sizeof(float));
-		std::memcpy(l.data, makeUboMatrix((*scene.currCam).viewMatrix), 16 * sizeof(float));
+		if (sphereind < MAX_LIGHT) { //sphere
+			memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
+		}
+		if (spotind < MAX_LIGHT) { //spot
+			memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
+		}
+		if (sunind < MAX_SUN_LIGHT) { // sun
+			memcpy(sunlightBuffersMapped[objIndex][currentImage][sunind], &l, sizeof(l));
+		}
 
-		memcpy(lightBuffersMapped[objIndex][currentImage], &l, sizeof(l));
 	}
 
 	void drawFrame() {
@@ -1517,16 +1578,31 @@ private:
 
 		VkDescriptorSetLayoutBinding lightLayoutBinding{};
 		lightLayoutBinding.binding = 8;
-		lightLayoutBinding.descriptorCount = 1;
+		lightLayoutBinding.descriptorCount = MAX_LIGHT;
 		lightLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		lightLayoutBinding.pImmutableSamplers = nullptr;
 		lightLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		VkDescriptorSetLayoutBinding lightLayoutBinding1{};
+		lightLayoutBinding1.binding = 9;
+		lightLayoutBinding1.descriptorCount = MAX_LIGHT;
+		lightLayoutBinding1.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		lightLayoutBinding1.pImmutableSamplers = nullptr;
+		lightLayoutBinding1.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		VkDescriptorSetLayoutBinding lightLayoutBinding2{};
+		lightLayoutBinding2.binding = 10;
+		lightLayoutBinding2.descriptorCount = MAX_SUN_LIGHT;
+		lightLayoutBinding2.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		lightLayoutBinding2.pImmutableSamplers = nullptr;
+		lightLayoutBinding2.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		// TODO: displacement, normal.
-		std::array<VkDescriptorSetLayoutBinding, 9> bindings = 
+		std::array<VkDescriptorSetLayoutBinding, 11> bindings = 
 		{ uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,
 			samplerLayoutBinding3 ,samplerLayoutBinding4 ,samplerLayoutBinding5,
-			samplerLayoutBinding6, samplerLayoutBinding7, lightLayoutBinding };
+			samplerLayoutBinding6, samplerLayoutBinding7, lightLayoutBinding,
+			lightLayoutBinding1,lightLayoutBinding2 };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1540,7 +1616,7 @@ private:
 
 	void createDescriptorPool() {
 
-		std::array<VkDescriptorPoolSize, 9> poolSizes{};
+		std::array<VkDescriptorPoolSize, 11> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1558,7 +1634,11 @@ private:
 		poolSizes[7].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[7].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[8].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[8].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[8].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
+		poolSizes[9].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[9].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
+		poolSizes[10].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[10].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_SUN_LIGHT);
 
 
 		VkDescriptorPoolCreateInfo poolInfo{};
@@ -1596,11 +1676,6 @@ private:
 				bufferInfo.buffer = uniformBuffers[obj][i];
 				bufferInfo.offset = 0;
 				bufferInfo.range = sizeof(UniformBufferObject);
-
-				VkDescriptorBufferInfo bufferInfo1{};
-				bufferInfo1.buffer = lightBuffers[obj][i];
-				bufferInfo1.offset = 0;
-				bufferInfo1.range = sizeof(LightObject);
 
 				int materialIndex = scene.objects[obj].mesh.material; // node of currently used material
 				if (scene.s72map[materialIndex].first != 5) cerr << "\n incorrect object instead of material encountered at descriptor set creation.";
@@ -1648,8 +1723,7 @@ private:
 				imageInfo7.imageView = textureImageView[materialIndex][6];
 				imageInfo7.sampler = textureSampler[materialIndex][6];
 
-
-				std::array<VkWriteDescriptorSet, 9> descriptorWrites{};
+				std::array<VkWriteDescriptorSet, 11> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1715,13 +1789,60 @@ private:
 				descriptorWrites[7].descriptorCount = 1;
 				descriptorWrites[7].pImageInfo = &imageInfo7;
 
+				// filling in descriptor set for lights. three, each for one type of light
+
+				std::array<VkDescriptorBufferInfo, MAX_LIGHT> bufferInfoSphere;
+				std::array<VkDescriptorBufferInfo, MAX_LIGHT> bufferInfoSpot;
+				std::array<VkDescriptorBufferInfo, MAX_SUN_LIGHT> bufferInfoSun;
+				
+
+				for (size_t j = 0; j < MAX_LIGHT; j++) {
+					VkDescriptorBufferInfo bi1{};
+					bi1.buffer = { spherelightBuffers[obj][i][j] };
+					bi1.offset = 0;
+					bi1.range = sizeof(LightObject);
+
+					VkDescriptorBufferInfo bi2{};
+					bi2.buffer = { spotlightBuffers[obj][i][j] };
+					bi2.offset = 0;
+					bi2.range = sizeof(LightObject);
+
+					bufferInfoSphere[j] = bi1;
+					bufferInfoSpot[j] = bi2;
+				}
+
+				for (size_t j = 0; j < MAX_SUN_LIGHT; j++) {
+					VkDescriptorBufferInfo bi1{};
+					bi1.buffer = { sunlightBuffers[obj][i][j] };
+					bi1.offset = 0;
+					bi1.range = sizeof(LightObject);
+
+					bufferInfoSun[j] = bi1;
+				}
+
 				descriptorWrites[8].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[8].dstSet = descriptorSets[(i * totalObjects) + obj];
 				descriptorWrites[8].dstBinding = 8;
 				descriptorWrites[8].dstArrayElement = 0;
 				descriptorWrites[8].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				descriptorWrites[8].descriptorCount = 1;
-				descriptorWrites[8].pBufferInfo = &bufferInfo1;
+				descriptorWrites[8].descriptorCount = MAX_LIGHT;
+				descriptorWrites[8].pBufferInfo = bufferInfoSphere.data();
+
+				descriptorWrites[9].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[9].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[9].dstBinding = 9;
+				descriptorWrites[9].dstArrayElement = 0;
+				descriptorWrites[9].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrites[9].descriptorCount = MAX_LIGHT;
+				descriptorWrites[9].pBufferInfo = bufferInfoSpot.data();
+
+				descriptorWrites[10].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[10].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[10].dstBinding = 10;
+				descriptorWrites[10].dstArrayElement = 0;
+				descriptorWrites[10].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrites[10].descriptorCount = MAX_SUN_LIGHT;
+				descriptorWrites[10].pBufferInfo = bufferInfoSun.data();
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
@@ -1745,16 +1866,51 @@ private:
 
 	void createLightBuffers(int objIndex) {
 		VkDeviceSize bufferSize = sizeof(LightObject);
+		sunlightBuffers[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		sunlightBuffersMemory[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		sunlightBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
 
-		lightBuffers[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
-		lightBuffersMemory[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
-		lightBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		spotlightBuffers[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		spotlightBuffersMemory[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		spotlightBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+
+		spherelightBuffers[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		spherelightBuffersMemory[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		spherelightBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-				lightBuffers[objIndex][i], lightBuffersMemory[objIndex][i]);
 
-			vkMapMemory(device, lightBuffersMemory[objIndex][i], 0, bufferSize, 0, &lightBuffersMapped[objIndex][i]);
+			spotlightBuffers[objIndex][i].resize(MAX_LIGHT);
+			spotlightBuffersMemory[objIndex][i].resize(MAX_LIGHT);
+			spotlightBuffersMapped[objIndex][i].resize(MAX_LIGHT);
+
+			spherelightBuffers[objIndex][i].resize(MAX_LIGHT);
+			spherelightBuffersMemory[objIndex][i].resize(MAX_LIGHT);
+			spherelightBuffersMapped[objIndex][i].resize(MAX_LIGHT);
+
+			sunlightBuffers[objIndex][i].resize(MAX_SUN_LIGHT);
+			sunlightBuffersMemory[objIndex][i].resize(MAX_SUN_LIGHT);
+			sunlightBuffersMapped[objIndex][i].resize(MAX_SUN_LIGHT);
+
+			// initializing buffer for spot and sphere light
+			for (size_t j = 0; j < MAX_LIGHT; j++) {
+
+				createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					spotlightBuffers[objIndex][i][j], spotlightBuffersMemory[objIndex][i][j]);
+				createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					spherelightBuffers[objIndex][i][j], spherelightBuffersMemory[objIndex][i][j]);
+
+				vkMapMemory(device, spotlightBuffersMemory[objIndex][i][j], 0, bufferSize, 0, &spotlightBuffersMapped[objIndex][i][j]);
+				vkMapMemory(device, spherelightBuffersMemory[objIndex][i][j], 0, bufferSize, 0, &spherelightBuffersMapped[objIndex][i][j]);
+			}
+			// initializing buffer for sun light
+			for (size_t j = 0; j < MAX_SUN_LIGHT; j++) {
+				createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					sunlightBuffers[objIndex][i][j], sunlightBuffersMemory[objIndex][i][j]);
+
+				vkMapMemory(device, sunlightBuffersMemory[objIndex][i][j], 0, bufferSize, 0, &sunlightBuffersMapped[objIndex][i][j]);
+			}
+
 		}
 	}
 
@@ -2453,9 +2609,17 @@ private:
 		uniformBuffersMemory.resize(totalObjects);
 		uniformBuffersMapped.resize(totalObjects);
 
-		lightBuffers.resize(totalObjects);
-		lightBuffersMemory.resize(totalObjects);
-		lightBuffersMapped.resize(totalObjects);
+		sunlightBuffers.resize(totalObjects);
+		sunlightBuffersMemory.resize(totalObjects);
+		sunlightBuffersMapped.resize(totalObjects);
+
+		spotlightBuffers.resize(totalObjects);
+		spotlightBuffersMemory.resize(totalObjects);
+		spotlightBuffersMapped.resize(totalObjects);
+
+		spherelightBuffers.resize(totalObjects);
+		spherelightBuffersMemory.resize(totalObjects);
+		spherelightBuffersMapped.resize(totalObjects);
 
 		cout << "\nCreating descriptor pool";
 		createDescriptorPool();
@@ -2571,11 +2735,22 @@ private:
 		
 		for (size_t obj = 0; obj < totalObjects; obj++) {
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+
 				vkDestroyBuffer(device, uniformBuffers[obj][i], nullptr);
 				vkFreeMemory(device, uniformBuffersMemory[obj][i], nullptr);
 
-				vkDestroyBuffer(device, lightBuffers[obj][i], nullptr);
-				vkFreeMemory(device, lightBuffersMemory[obj][i], nullptr);
+				for (size_t j = 0; j < MAX_LIGHT; j++) {
+					vkDestroyBuffer(device, spotlightBuffers[obj][i][j], nullptr);
+					vkFreeMemory(device, spotlightBuffersMemory[obj][i][j], nullptr);
+					vkDestroyBuffer(device, spherelightBuffers[obj][i][j], nullptr);
+					vkFreeMemory(device, spherelightBuffersMemory[obj][i][j], nullptr);
+				}
+				for (size_t j = 0; j < MAX_SUN_LIGHT; j++) {
+					vkDestroyBuffer(device, sunlightBuffers[obj][i][j], nullptr);
+					vkFreeMemory(device, sunlightBuffersMemory[obj][i][j], nullptr);
+				}
+
+				
 			}
 		}
 
