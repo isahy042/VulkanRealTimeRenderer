@@ -13,7 +13,7 @@
 using namespace std;
 
 /// *****currently assuming all attributes files are the same.
-string folder = "s72-main/examples/";
+string folder = "s72-main/examples/b72/";
 
 class Mesh
 {

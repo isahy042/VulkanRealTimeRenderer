@@ -25,15 +25,6 @@ layout(location = 5) in vec3 bitang;
 
 layout(location = 0) out vec3 outColor;
 
-vec3 rgbe2rgb(vec4 rgbe) {
-    // Extract exponent
-    if (rgbe.x + rgbe.y + rgbe.z + rgbe.w == 0) return vec3(0.0);
-
-    rgbe = rgbe * 255;
-    int exponent = int(floor(rgbe.w));
-    // Convert RGBE to linear RGB' using the specified formula
-    return exp2(exponent - 128) * ((rgbe.xyz + 0.5)/256);
-}
 
 // Apply Reinhard tone mapping operator
 vec3 toneMapReinhard(vec3 linearRGB) {
@@ -53,29 +44,38 @@ vec3 gammaEncode(vec3 color) {
     return vec3(gammaEncode(color.r), gammaEncode(color.g), gammaEncode(color.b));
 }
 
+vec4 gammaEncode(vec4 color) {
+    return vec4(gammaEncode(color.x), gammaEncode(color.y), gammaEncode(color.z), gammaEncode(color.w));
+}
+
+vec3 rgbe2rgb(vec4 rgbe) {
+    // Extract exponent
+    
+    if (rgbe.x + rgbe.y + rgbe.z + rgbe.w == 0) return vec3(0.0);
+
+    rgbe = rgbe * 255;
+    int exponent = 128;//int(floor(rgbe.w));
+    // Convert RGBE to linear RGB' using the specified formula
+    return exp2(exponent - 128) * ((rgbe.xyz+ 0.5)/256);
+}
+
+
 void main() {
     float roughness = gammaEncode(texture(roughnessTexture, surfaceNormal).xyz).x;
     float metalness = gammaEncode(texture(metalnessTexture, surfaceNormal).xyz).x;
     vec3 albedo =  rgbe2rgb(texture(albedoTexture, surfaceNormal));
 
     vec3 I = position - cameraPosition;
-    float NoV = clamp(dot(normalize(surfaceNormal), normalize(I)), 0.5, 1.0); //cosine theta
-    //vec3 R = 2 * dot(surfaceNormal, I) * surfaceNormal - I; // reflecting I.
+
+    float NoV = clamp(dot(normalize(surfaceNormal), normalize(-I)), 0, 1.0); //cosine theta
     vec3 reflected = reflect(normalize(I), normalize(surfaceNormal));
 
-    vec3 PrefilteredColor = rgbe2rgb(textureLod(mipmapTexture, reflected, roughness/0.2));
+    vec3 PrefilteredColor = rgbe2rgb(textureLod(mipmapTexture, reflected, round(roughness/0.2)));
+    vec3 baseColor = albedo * PrefilteredColor;
 
-    vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(roughness, NoV)).xyz).xy;
-    vec3 c = PrefilteredColor * ( albedo * EnvBRDF.x + EnvBRDF.y );
+    vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(1.0-roughness,  NoV)).xyz).xy;
+    vec3 c = (vec3(1) * EnvBRDF.x) + EnvBRDF.y;
 
-    // outColor = PrefilteredColor;//(textureLod(mipmapTexture, surfaceNormal, roughness/0.2).xyz) * NoV;
-
-    // vec3 I = position - cameraPosition;
-    // vec3 R = reflect(normalize(I), normalize(surfaceNormal));
-    //outColor = toneMapReinhard(rgbe2rgb(textureLod(mipmapTexture, reflected, roughness/0.2)));
-
-    outColor = (textureLod(mipmapTexture, reflected, roughness/0.2).xyz) * NoV;
-
+    outColor = c * baseColor;
 
 }
-

@@ -13,7 +13,6 @@
 #include "stb_image_write.h"
 
 
-
 class Material {
 public:
 
@@ -563,15 +562,23 @@ Vec3f ImportanceSampleGGX(Vec2f Xi, float Roughness, Vec3f N)
 	float a = Roughness * Roughness;
 	float Phi = 2 * 3.1415926 * Xi.x;
 	float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
-	float SinTheta = sqrt(1 - CosTheta * CosTheta);
+	float SinTheta = sqrt(1 - (CosTheta * CosTheta));
 	Vec3f H;
 	H.x = SinTheta * cos(Phi);
 	H.y = SinTheta * sin(Phi);
 	H.z = CosTheta;
+
 	Vec3f UpVector = abs(N.z) < 0.999 ? Vec3f(0, 0, 1) : Vec3f(1, 0, 0);
 	Vec3f TangentX = normalize(cross(UpVector, N));
 	Vec3f TangentY = cross(N, TangentX);
-	return TangentX * H.x + TangentY * H.y + N * H.z;
+
+	Vec3f f = TangentX * H.x + TangentY * H.y + N * H.z;
+
+	/*cout << "\n h " << H.x << " " << H.y << " " << H.z;
+	cout << "\n n " << N.x << " " << N.y << " " << N.z;
+	cout << "\n r " << f.x << " " << f.y << " " << f.z;*/
+	return f;
+
 }
 
 // helper functions for material cubemap parsing.
@@ -660,14 +667,17 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 			else if (cubeIndex == 5) normal[0] -= dx;
 
 			Vec4f sampledColor = Vec4f(0.f);
-			Vec3f viewing = normal;
 			float totalWeight = 0;
 
 			for (int s = 0; s < 1000; s++) {
 
 				Vec2f Xi = Vec2f(randf(), randf());
-				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal); // importance sample a direccti
-				Vec3f scatterDir = 2 * dot(viewing, H) * H - viewing;
+				Vec3f H = -ImportanceSampleGGX(Xi, roughness, normal); // sampling a direction
+				Vec3f scatterDir = 2 * dot(normalize(normal), normalize(H)) * H - normal; // reflect about normal
+
+				//cout << "\n h " << H.x << " " << H.y << " " << H.z;
+				//cout << "\n n " << normal.x << " " << normal.y << " " << normal.z;
+				//cout << "\n r " << scatterDir.x << " " << scatterDir.y << " " << scatterDir.z;
 
 				Vec2f index = getIndexForCubeMap(scatterDir);
 
@@ -676,17 +686,12 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 
 				Vec4f c = inImg[iy][ix];
 
-				float NoL = clip(dot(normal, scatterDir), 0, 1);
+				float NoL = dot(normalize(normal), normalize(scatterDir));
 
-				if (!(NoL <= 1) && !(NoL >= 0)) cout << "\n NoL" << NoL;
-
-				if (NoL > 0)
-				{
-					sampledColor = sampledColor + c * NoL;
-					totalWeight += NoL;
-				}
+				if (NoL <= 0) continue; // if sampled direction opposite dir as normal
+				sampledColor = sampledColor + (c * NoL);
+				totalWeight += NoL;
 			}
-
 			outImg[h][w] = sampledColor / totalWeight;
 			//outImg[h][w].w = 1.f;
 		}
@@ -715,6 +720,7 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 
 // is this right???
 float G_Smith(float Roughness, float NoV, float NoL) {
+	return 1.0f;
 	float k = (Roughness + 1) * (Roughness + 1) / 8.0f;
 	float G_V = NoV / (NoV * (1.0f - k) + k);
 	float G_L = NoL / (NoL * (1.0f - k) + k);
@@ -735,13 +741,14 @@ void makePBRLUT() {
 	Vec3f V;
 	Vec3f normal = Vec3f(0, 0, 1);
 	float roughness = 0.f;
-	float roughnessIncrement = (1 / (outWidth - 1));
-	float NoV = 0.f;
-	float NoVIncrement = (2 * 3.1415926 / (outWidth - 1));
+	float roughnessIncrement = (1.f / (outWidth - 1));
+	float NoV = 1.f;
+	float NoVIncrement = 1.f / (outWidth - 1);
 
 	for (int h = 0; h < outWidth; h++) {
 		for (int w = 0; w < outWidth; w++) {
-			V.x = sqrt(1.0f - NoV * NoV); // sin
+			
+			V.x = sqrt(1.0f - (NoV * NoV)); // sin
 			V.y = 0;
 			V.z = NoV; // cos
 
@@ -751,13 +758,20 @@ void makePBRLUT() {
 			for (int s = 0; s < 1000; s++) {
 
 				Vec2f Xi = Vec2f(randf(), randf());
-				Vec3f H = ImportanceSampleGGX(Xi, roughness, normal);
-				Vec3f L = 2 * dot(V, H) * H - V;
+				Vec3f H = normalize(ImportanceSampleGGX(Xi, roughness, normal));
+				Vec3f L = 2 * dot(normalize(V), normalize(-H)) * (-H) - V;
 
 				float NoL = clamp(L.z,0.f,1.f);
-				float NoH = clamp(H.z, 0.f, 1.f);
+				float NoH = clamp(H.z, 0.f, 1.f); // always 1.
 				float VoH = clamp(dot(V, H), 0.f, 1.f);
 
+				//if (h == 1 && w == 1) {
+				//	cout << "\n L " << L.x << " " << L.y << " " << L.z;
+				//	cout << "\n L " << V.x << " " << V.y << " " << V.z;
+				//	cout << "\n H" << H.x << " " << H.y << " " << H.z;
+				//	cout << "\n ah" << NoL << " " << NoH << " " << VoH;
+
+				//}
 				if (NoL > 0)
 				{
 					float G = G_Smith(roughness, NoV, NoL);
@@ -765,15 +779,16 @@ void makePBRLUT() {
 					float Fc = pow(1 - VoH, 5);
 					A += (1 - Fc) * G_Vis;
 					B += Fc * G_Vis;
+
 				}
 
 			}
 
 			Vec2f finalSamples = Vec2f(A, B) / 1000;
-			outImg[h][w] = Vec4f(finalSamples.x, finalSamples.y, 0.f,0.f);
-			NoV += NoVIncrement;
+			outImg[h][w] = Vec4f(finalSamples.x, finalSamples.y, 0.f, 0.f);
+			NoV -= NoVIncrement;
 		}
-		NoV = 0.f;
+		NoV = 1.f;
 		roughness += roughnessIncrement;
 	}
 	
@@ -782,7 +797,6 @@ void makePBRLUT() {
 	int p = 0;
 	for (int h = 0; h < outWidth; h++) {
 		for (int w = 0; w < outWidth; w++) {
-
 			outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
 			outImgArr[(p * 4) + 1] = clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
 			outImgArr[(p * 4) + 2] = 0;
@@ -793,7 +807,6 @@ void makePBRLUT() {
 
 	string on = "s72-main/examples/" + outFilename;
 	const char* onc = on.c_str();
-	//stbi__create_png_image();
 
 	stbi_write_png(onc, outWidth, outWidth, 4, outImgArr, 4 * outWidth);
 

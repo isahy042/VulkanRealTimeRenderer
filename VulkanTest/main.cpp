@@ -29,9 +29,9 @@
 
 #include <chrono>
 
-
-
 # include "s72parser.h"
+
+
 
 // using directive
 using namespace std;
@@ -292,15 +292,13 @@ private:
 		// testing this:
 		// TODO: not hardcode in the specular map for the environment cube.
 		//makeLambertianCubeMap("ocean-map.png");
-		//makeLambertianCubeMap("env-cube.png");
+		//makeLambertianCubeMap("env-cube1.png");
 
-		//makePBRCubeMap("env-cube.png", 1.f, 0);
-
-		float roughness = 0.f;
-		for (int r = 0; r < 6; r++) {
-			makePBRCubeMap("env-cube.png", roughness, r);
-			roughness += 0.2f;
-		}
+		//float roughness = 0.f;
+		//for (int r = 0; r < 6; r++) {
+		//	makePBRCubeMap("env-cube1.png", roughness, r);
+		//	roughness += 0.2f;
+		//}
 
 		//makePBRLUT();
 	}
@@ -1920,7 +1918,7 @@ private:
 			vkFreeMemory(device, stagingBufferMemory, nullptr);
 		}
 		else if (!mipmap) {
-			string sn = "s72-main/examples/" + filename;
+			string sn = "s72-main/examples/texture/" + filename;
 			const char* charArray = sn.c_str();
 			stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
@@ -1957,7 +1955,7 @@ private:
 			stbi_uc* mipmaps[6];
 
 			for (int l = 0; l < 6; l++) {
-				string sn = "s72-main/examples/pbr-map-" + to_string(l) + "-"+ filename;
+				string sn = "s72-main/examples/texture/pbr-map-" + to_string(l) + "-"+ filename;
 				const char* charArray = sn.c_str();
 				mipmaps[l] = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
@@ -2259,7 +2257,7 @@ private:
 	void createTextureImage(string filename, int matIndex, int category) {
 		int texWidth, texHeight, texChannels;
 
-		string sn = "s72-main/examples/" + filename;
+		string sn = "s72-main/examples/texture/" + filename;
 		const char* charArray = sn.c_str();
 		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 

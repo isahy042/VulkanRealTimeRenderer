@@ -15,6 +15,7 @@
 #include "mesh.h"
 #include "driver.h"
 #include "materials.h"
+#include "light.h"
 
 #include "node.h"
 
@@ -58,6 +59,7 @@ public:
     vector<Driver> drivers;
     vector<Object> objects;
     vector<shared_ptr<Material>> materials;
+    vector<shared_ptr<Light>> lights;
     shared_ptr<Environment> envMat;
     
     map<int, int> nodeToObj;
@@ -85,7 +87,7 @@ public:
         s72map.push_back(make_pair(-1,-1)); // 0 is invalid
         envMat = make_shared<Environment>();
 
-        while (std::getline(file, line))
+        while (getline(file, line))
         {
             if (line[0] == '{')
             {
@@ -240,6 +242,69 @@ public:
                         envMat->setValue("radiance", getValue(line));
                         env.y = s72map.size() - 1;
                         s72map.push_back(make_pair(6, -1));
+                    }
+                    else if (objName == "LIGHT") // 7 - light
+                    {
+                        std::getline(file, line); // name
+                        string name = line;
+                        std::getline(file, line); 
+                        string tint = "";
+                        if (getName(line) == "tint") {
+                            tint = line;
+                            std::getline(file, line);
+                        }
+                        string type = getName(line);
+                        if (type == "sun") {
+                            shared_ptr<Sun> light = make_shared<Sun>();
+                            light->setValue("name", getValue(name));
+                            light->setValue("tint", getValue(tint));
+                            getline(file, line);
+                            while (line[0] != '}')
+                            {
+                                light->setValue(getName(line), getValue(line));
+                                getline(file, line);
+                            }
+                            getline(file, line);
+                            if (line[0] != '}') {
+                                light->setValue(getName(line), getValue(line)); // shadow
+                            }
+                            lights.push_back(light);
+                            s72map.push_back(make_pair(7, lights.size() - 1));
+                        }
+                        else if (type == "sphere") {
+                            shared_ptr<Sphere> light = make_shared<Sphere>();
+                            light->setValue("name", getValue(name));
+                            light->setValue("tint", getValue(tint));
+                            getline(file, line);
+                            while (line[0] != '}')
+                            {
+                                light->setValue(getName(line), getValue(line));
+                                getline(file, line);
+                            }
+                            getline(file, line);
+                            if (line[0] != '}') {
+                                light->setValue(getName(line), getValue(line)); // shadow
+                            }
+                            lights.push_back(light);
+                            s72map.push_back(make_pair(7, lights.size() - 1));
+                        }
+                        else if (type == "spot") {
+                            shared_ptr<Spot> light = make_shared<Spot>();
+                            light->setValue("name", getValue(name));
+                            light->setValue("tint", getValue(tint));
+                            getline(file, line);
+                            while (line[0] != '}')
+                            {
+                                light->setValue(getName(line), getValue(line));
+                                getline(file, line);
+                            }
+                            getline(file, line);
+                            if (line[0] != '}') {
+                                light->setValue(getName(line), getValue(line)); // shadow
+                            }
+                            lights.push_back(light);
+                            s72map.push_back(make_pair(7, lights.size() - 1));
+                        }
                     }
 
                 }
