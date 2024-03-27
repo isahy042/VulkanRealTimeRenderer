@@ -87,6 +87,7 @@ public:
         s72map.push_back(make_pair(-1,-1)); // 0 is invalid
         envMat = make_shared<Environment>();
 
+        int obji = 0;
         while (getline(file, line))
         {
             if (line[0] == '{')
@@ -96,7 +97,8 @@ public:
                 if (line.substr(2, 4) == "type")
                 {
                     string objName = line.substr(9, 5);
-                   // cout << "finding object with name " << objName << "\n";
+                    obji++;
+                    // cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {
@@ -123,6 +125,7 @@ public:
                     {
                         Node node = Node();
                         std::getline(file, line); // name
+
                         while (line[0] != '}')
                         {
                             node.setValue(getName(line), getValue(line));
@@ -148,8 +151,8 @@ public:
                         s72map.push_back(make_pair(3, cameras.size() - 1));
                         //currCam = &cameras[0];
 
-                        if (cameras.back().name == preferredCamera) { 
-                            preferredCameraIndex = cameras.size() - 1;    
+                        if (cameras.back().name == preferredCamera) {
+                            preferredCameraIndex = cameras.size() - 1;
                         }
                     }
                     else if (objName == "DRIVE") // 4 - driver
@@ -212,7 +215,7 @@ public:
                             mat->setValue("name", getValue(name));
                             mat->setValue("normalMap", getValue(normalMap));
                             mat->setValue("displacementMap", getValue(displacementMap));
-                           
+
                             materials.push_back(mat);
 
                             s72map.push_back(make_pair(5, materials.size() - 1));
@@ -247,7 +250,7 @@ public:
                     {
                         std::getline(file, line); // name
                         string name = line;
-                        std::getline(file, line); 
+                        std::getline(file, line);
                         string tint = "";
                         if (getName(line) == "tint") {
                             tint = line;
@@ -259,7 +262,7 @@ public:
                             light->setValue("name", getValue(name));
                             light->setValue("tint", getValue(tint));
                             getline(file, line);
-                            while (line[0] != '}')
+                            while (line[1] != '}')
                             {
                                 light->setValue(getName(line), getValue(line));
                                 getline(file, line);
@@ -276,7 +279,7 @@ public:
                             light->setValue("name", getValue(name));
                             light->setValue("tint", getValue(tint));
                             getline(file, line);
-                            while (line[0] != '}')
+                            while (line[1] != '}')
                             {
                                 light->setValue(getName(line), getValue(line));
                                 getline(file, line);
@@ -293,7 +296,7 @@ public:
                             light->setValue("name", getValue(name));
                             light->setValue("tint", getValue(tint));
                             getline(file, line);
-                            while (line[0] != '}')
+                            while (line[1] != '}')
                             {
                                 light->setValue(getName(line), getValue(line));
                                 getline(file, line);
@@ -309,7 +312,8 @@ public:
 
                 }
             }
-        }
+
+    }
 
         // initialize cameras, drivers, meshes
         for (int i = 0; i<meshes.size(); i++) meshes[i].fillAttribute();
@@ -331,6 +335,7 @@ public:
             return 0;
        }
 
+       cout << "\n number of nodes:" << s72map.size();
        // perform graph traversal, assuming no back edge.
        for (int& root : roots) {
            vector<Vec3f> scales;
@@ -378,8 +383,10 @@ public:
         trans.push_back(n.translate);
         rotates.push_back(n.rotate);
 
-        if (n.camera > 0) instantiateCamera(n.camera, scales, trans, rotates);
-        if (n.mesh > 0) instantiateMesh(n.mesh, root, scales, trans, rotates);
+        Vec44f transMatrix = generateTransformationMatrix(scales, trans, rotates);
+        if (n.camera > 0) instantiateCamera(n.camera, transMatrix);
+        if (n.mesh > 0) instantiateMesh(n.mesh, root, transMatrix);
+        if (n.light > 0) instantiateLight(n.light, transMatrix);
         if (n.children.size() > 0) {
             for (int& child : n.children) {
                 instantiateNode(child, scales, trans, rotates);
@@ -390,18 +397,17 @@ public:
     }
 
     // construct graph!
-    int instantiateMesh(int meshAt, int nodeAt, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    int instantiateMesh(int meshAt, int nodeAt, Vec44f tm) {
         //cout << "Instantiating Mesh " << meshAt << "\n";
         // check if mesh
         if (s72map[meshAt].first != 1) {
-            printf("wants to instantiate mesh, but given object %d instead. \n", s72map[meshAt].first);
+            printf("wants to instantiate mesh, but given object %d instead at node %d. \n", s72map[meshAt].first, meshAt);
             return 0;
         }
         Object o = Object(meshes[s72map[meshAt].second]);
         
         // transformation matrix
-        int transformations = scales.size();
-        o.transformMatrix = generateTransformationMatrix(scales, trans, rotates);
+        o.transformMatrix = tm;
 
         // bounding box
         o.updateBoundingBox();
@@ -415,16 +421,27 @@ public:
         nodeToObj[nodeAt] = objects.size() - 1;
     }
 
-    int instantiateCamera(int at, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {
+    int instantiateCamera(int at, Vec44f tm) {
         // check if camera
         if (s72map[at].first != 3) {
             printf("wants to instantiate camera, but given object %d instead. \n", s72map[at].first);
             return 0;
         }
         // TODO: transform camera.
-        Vec44f m = generateTransformationMatrix(scales, trans, rotates);
-        cameras[s72map[at].second].transformMatrix = m;
-        cameras[s72map[at].second].viewMatrix = transpose44(invert44(m));
+        cameras[s72map[at].second].transformMatrix = tm;
+        cameras[s72map[at].second].viewMatrix = transpose44(invert44(tm));
+
+        return 1;
+
+    }
+
+    int instantiateLight(int at, Vec44f tm) {
+        // check if light
+        if (s72map[at].first != 7) {
+            printf("wants to instantiate light, but given object %d instead. \n", s72map[at].first);
+            return 0;
+        }
+        lights[s72map[at].second]->setTransformationMatrix(tm);
 
         return 1;
 

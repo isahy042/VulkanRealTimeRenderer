@@ -38,6 +38,7 @@ using namespace std;
 
 uint32_t WIDTH = 800;
 uint32_t HEIGHT = 600;
+const int TEXTURE_COUNT = 7;
 bool adjustDimension = true;
 
 const string currRepo = ""; // for some reason this needs to be added manually :(
@@ -125,6 +126,12 @@ struct Vertex {
 	}
 };
 
+// structures for each type of light.
+struct LightObject {
+	// std430 in the layout qualifier
+	alignas(16) float model[16]; 
+	alignas(16) float data[16];
+};
 
 struct UniformBufferObject {
 	// std430 in the layout qualifier
@@ -141,7 +148,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/env-sphere.s72";
+	string s72filepath = "s72-main/examples/lights-Mix.s72";//sg-Articulation.s72";//
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -213,6 +220,10 @@ private:
 	vector<vector<VkBuffer>> uniformBuffers;
 	vector<vector<VkDeviceMemory>> uniformBuffersMemory;
 	vector<vector<void*>> uniformBuffersMapped;
+
+	vector<vector<VkBuffer>> lightBuffers;
+	vector<vector<VkDeviceMemory>> lightBuffersMemory;
+	vector<vector<void*>> lightBuffersMapped;
 
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
@@ -1114,6 +1125,20 @@ private:
 		memcpy(uniformBuffersMapped[objIndex][currentImage], &ubo, sizeof(ubo));
 	}
 
+	void updateLightBuffer(uint32_t currentImage, int objIndex) {
+		//static auto startTime = std::chrono::high_resolution_clock::now();
+
+		//auto currentTime = std::chrono::high_resolution_clock::now();
+		//float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		LightObject l{};
+
+		std::memcpy(l.model, makeUboMatrix(transpose44(scene.objects[objIndex].transformMatrix)), 16 * sizeof(float));
+		std::memcpy(l.data, makeUboMatrix((*scene.currCam).viewMatrix), 16 * sizeof(float));
+
+		memcpy(lightBuffersMapped[objIndex][currentImage], &l, sizeof(l));
+	}
+
 	void drawFrame() {
 
 		// wait for prev frame
@@ -1139,6 +1164,7 @@ private:
 		for (int obj = 0; obj < totalObjects; obj++) {
 			if (isCulling && !scene.objects[obj].inFrame) continue;
 			updateUniformBuffer(currentFrame, obj);
+			updateLightBuffer(currentFrame, obj);
 		}
 
 		// manually reset the fence to the unsignaled state
@@ -1489,11 +1515,18 @@ private:
 		samplerLayoutBinding7.pImmutableSamplers = nullptr;
 		samplerLayoutBinding7.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		VkDescriptorSetLayoutBinding lightLayoutBinding{};
+		lightLayoutBinding.binding = 8;
+		lightLayoutBinding.descriptorCount = 1;
+		lightLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		lightLayoutBinding.pImmutableSamplers = nullptr;
+		lightLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		// TODO: displacement, normal.
-		std::array<VkDescriptorSetLayoutBinding, 8> bindings = 
+		std::array<VkDescriptorSetLayoutBinding, 9> bindings = 
 		{ uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,
 			samplerLayoutBinding3 ,samplerLayoutBinding4 ,samplerLayoutBinding5,
-			samplerLayoutBinding6, samplerLayoutBinding7};
+			samplerLayoutBinding6, samplerLayoutBinding7, lightLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1507,7 +1540,7 @@ private:
 
 	void createDescriptorPool() {
 
-		std::array<VkDescriptorPoolSize, 8> poolSizes{};
+		std::array<VkDescriptorPoolSize, 9> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1524,6 +1557,8 @@ private:
 		poolSizes[6].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[7].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[7].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		poolSizes[8].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[8].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 
 		VkDescriptorPoolCreateInfo poolInfo{};
@@ -1556,10 +1591,16 @@ private:
 		// when 1D array, store so that all objects of one frame are together.
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 			for (size_t obj = 0; obj < totalObjects; obj++) {
+
 				VkDescriptorBufferInfo bufferInfo{};
 				bufferInfo.buffer = uniformBuffers[obj][i];
 				bufferInfo.offset = 0;
 				bufferInfo.range = sizeof(UniformBufferObject);
+
+				VkDescriptorBufferInfo bufferInfo1{};
+				bufferInfo1.buffer = lightBuffers[obj][i];
+				bufferInfo1.offset = 0;
+				bufferInfo1.range = sizeof(LightObject);
 
 				int materialIndex = scene.objects[obj].mesh.material; // node of currently used material
 				if (scene.s72map[materialIndex].first != 5) cerr << "\n incorrect object instead of material encountered at descriptor set creation.";
@@ -1608,7 +1649,7 @@ private:
 				imageInfo7.sampler = textureSampler[materialIndex][6];
 
 
-				std::array<VkWriteDescriptorSet, 8> descriptorWrites{};
+				std::array<VkWriteDescriptorSet, 9> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1674,6 +1715,14 @@ private:
 				descriptorWrites[7].descriptorCount = 1;
 				descriptorWrites[7].pImageInfo = &imageInfo7;
 
+				descriptorWrites[8].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[8].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[8].dstBinding = 8;
+				descriptorWrites[8].dstArrayElement = 0;
+				descriptorWrites[8].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrites[8].descriptorCount = 1;
+				descriptorWrites[8].pBufferInfo = &bufferInfo1;
+
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
 		}
@@ -1687,9 +1736,25 @@ private:
 		uniformBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[objIndex][i], uniformBuffersMemory[objIndex][i]);
+			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+				uniformBuffers[objIndex][i], uniformBuffersMemory[objIndex][i]);
 
 			vkMapMemory(device, uniformBuffersMemory[objIndex][i], 0, bufferSize, 0, &uniformBuffersMapped[objIndex][i]);
+		}
+	}
+
+	void createLightBuffers(int objIndex) {
+		VkDeviceSize bufferSize = sizeof(LightObject);
+
+		lightBuffers[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		lightBuffersMemory[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+		lightBuffersMapped[objIndex].resize(MAX_FRAMES_IN_FLIGHT);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+				lightBuffers[objIndex][i], lightBuffersMemory[objIndex][i]);
+
+			vkMapMemory(device, lightBuffersMemory[objIndex][i], 0, bufferSize, 0, &lightBuffersMapped[objIndex][i]);
 		}
 	}
 
@@ -1824,10 +1889,10 @@ private:
 
 	void createCubeMapTextures(int materialIndex) {
 		string type = scene.materials[materialIndex]->getType();
-		textureImage[materialIndex].resize(7);
-		textureImageMemory[materialIndex].resize(7);
-		textureImageView[materialIndex].resize(7);
-		textureSampler[materialIndex].resize(7);
+		textureImage[materialIndex].resize(TEXTURE_COUNT);
+		textureImageMemory[materialIndex].resize(TEXTURE_COUNT);
+		textureImageView[materialIndex].resize(TEXTURE_COUNT);
+		textureSampler[materialIndex].resize(TEXTURE_COUNT);
 
 		if (type == "env") { // create environmet cube map.
 			//TODO: take both color AND filename. right now its only file name
@@ -2388,6 +2453,10 @@ private:
 		uniformBuffersMemory.resize(totalObjects);
 		uniformBuffersMapped.resize(totalObjects);
 
+		lightBuffers.resize(totalObjects);
+		lightBuffersMemory.resize(totalObjects);
+		lightBuffersMapped.resize(totalObjects);
+
 		cout << "\nCreating descriptor pool";
 		createDescriptorPool();
 
@@ -2397,6 +2466,7 @@ private:
 			createVertexBuffer(obj);
 			createIndexBuffer(obj);
 			createUniformBuffers(obj);
+			createLightBuffers(obj);
 		}
 
 		cout << "\nCreating descriptor sets.";
@@ -2490,7 +2560,7 @@ private:
 		cleanupSwapChain();
 
 		for (size_t i = 0; i < totalMaterials; i++) {
-			for (size_t j = 0; j < 7; j++) {
+			for (size_t j = 0; j < TEXTURE_COUNT; j++) {
 				vkDestroySampler(device, textureSampler[i][j], nullptr);
 				vkDestroyImageView(device, textureImageView[i][j], nullptr);
 
@@ -2503,6 +2573,9 @@ private:
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 				vkDestroyBuffer(device, uniformBuffers[obj][i], nullptr);
 				vkFreeMemory(device, uniformBuffersMemory[obj][i], nullptr);
+
+				vkDestroyBuffer(device, lightBuffers[obj][i], nullptr);
+				vkFreeMemory(device, lightBuffersMemory[obj][i], nullptr);
 			}
 		}
 

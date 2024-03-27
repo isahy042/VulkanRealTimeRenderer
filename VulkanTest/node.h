@@ -19,6 +19,7 @@ public:
     Vec3f scale = Vec3f(1, 1, 1);
     vector<int> children;
     int mesh = -1;
+    int light = -1;
     int camera = -1;
     int env = -1;
 
@@ -57,6 +58,10 @@ public:
         else if (n == "mesh")
         {
             mesh = stoi(val);
+        }
+        else if (n == "light")
+        {
+            light = stoi(val);
         }
         else if (n == "enviroment")
         {

@@ -7,6 +7,7 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 proj;
     mat4 cameraTrans;
 } ubo;
+
 layout (binding = 1) uniform samplerCube cubeMapTexture;
 layout (binding = 2) uniform samplerCube unusedTexture1;
 layout (binding = 3) uniform samplerCube unusedTexture2;
@@ -14,6 +15,13 @@ layout (binding = 4) uniform samplerCube unusedTexture3;
 layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
 layout (binding = 7) uniform sampler2D texSampler;
+
+layout(binding = 0) uniform LightObject {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+    mat4 cameraTrans;
+} light;
 
 
 layout(location = 0) in vec3 surfaceNormal;

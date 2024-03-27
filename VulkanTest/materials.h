@@ -253,7 +253,7 @@ public:
 				size_t end = val.find('"', start);
 				albedo = val.substr(start, end - start);
 			}
-			cout << albedo << "\n";
+			//cout << albedo << "\n";
 		}
 		else if (n == "normalMap")
 		{
