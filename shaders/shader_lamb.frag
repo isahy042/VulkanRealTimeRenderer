@@ -69,6 +69,69 @@ vec3 gammaEncode(vec3 color) {
     return vec3(gammaEncode(color.r), gammaEncode(color.g), gammaEncode(color.b));
 }
 
+vec3 getSphereLight(vec3 normal){
+
+    vec3 color = vec3(0.);
+    mat4 light;
+
+    // iterate through ights, break out early if possible
+    for (int i = 0; i < 10; i++){
+        
+        light = sphereLight[i].data;
+        if (light[0][0]<1) {
+            break;
+        }
+
+        // check if in range of illumination
+        float limit = light[1].w;        
+        vec3 lightPos = vec3(sphereLight[i].model * vec4(0.0,0.0,0.0,1.0));
+        float d = length(position - lightPos);
+
+        if (1 - pow(d/limit, 4.0) <= 0) {
+            continue;
+        }
+
+        // get light specs
+        vec3 tint = light[0].yzw;
+        float shadow = light[1].x;
+        float radius = light[1].y;
+        float power = light[1].z;
+
+        // determine whether the normal hits the light.
+        // part of the code from https://kylehalladay.com/blog/tutorial/math/2013/12/24/Ray-Sphere-Intersection.html
+        vec3 l = lightPos-position;
+        float lengthOfN = dot(l, normalize(normal));
+        float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+        bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
+
+        if (intersect){
+            color += tint*(power/(4*3.1415*d*d));
+        }
+        else{
+            color += tint*(power/(4*3.1415*d*d))*dot(normalize(l), normalize(normal));
+        }
+    }
+    return color;
+}
+
+// vec3 getSpotLight(){
+//     vec3 color = vec3(0.);
+//     for (int i = 0; i++; i<10){
+//         if (spotLight[i][0][0]<1) {break;}
+
+//     }
+//     return color;
+// }
+
+// vec3 getSunLight(){
+//     vec3 color = vec3(0.);
+//     for (int i = 0; i++; i<5){
+//         if (sunLight[i][0][0]<1) {break;}
+
+//     }
+//     return color;
+// }
+
 void main() {
     for (int i = 0; i<3; i++){
         break;
@@ -81,6 +144,6 @@ void main() {
 
     vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * rgbe2rgb(texture(albedoTexture, newNormal));
 
-    outColor = toneMapReinhard(c);
+    outColor = toneMapReinhard(c+getSphereLight(newNormal));
 }
 

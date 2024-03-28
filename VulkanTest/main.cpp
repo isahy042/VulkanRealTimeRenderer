@@ -151,7 +151,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/lights-Mix.s72";//sg-Articulation.s72";//
+	string s72filepath = "s72-main/examples/simple-light.s72";//lights - Mix.s72";//sg-Articulation.s72";//simple-light
 
 	string PreferredCamera = "";
 	bool isCulling = true;

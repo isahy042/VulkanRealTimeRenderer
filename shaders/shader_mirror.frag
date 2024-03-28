@@ -16,10 +16,20 @@ layout (binding = 5) uniform samplerCube normalMap;
 layout (binding = 6) uniform samplerCube displacementMap;
 layout (binding = 7) uniform sampler2D texSampler;
 
-layout(binding = 8) uniform LightObject {
+layout(binding = 8) uniform LightObject1 {
     mat4 model;
     mat4 data;
-} light[5];
+} sphereLight[10];
+
+layout(binding = 9) uniform LightObject2 {
+    mat4 model;
+    mat4 data;
+} spotLight[10];
+
+layout(binding = 10) uniform LightObject3 {
+    mat4 model;
+    mat4 data;
+} sunLight[5];
 
 
 layout(location = 0) in vec3 surfaceNormal;
@@ -59,6 +69,50 @@ vec3 gammaEncode(vec3 color) {
     return vec3(gammaEncode(color.r), gammaEncode(color.g), gammaEncode(color.b));
 }
 
+vec3 getSphereLight(vec3 normal){
+
+    vec3 color = vec3(0.);
+    mat4 light;
+
+    // iterate through ights, break out early if possible
+    for (int i = 0; i < 10; i++){
+        
+        light = sphereLight[i].data;
+        if (light[0][0]<1) {
+            break;
+        }
+
+        // check if in range of illumination
+        float limit = light[1].w;        
+        vec3 lightPos = vec3(sphereLight[i].model * vec4(0.0,0.0,0.0,1.0));
+        float d = length(position - lightPos);
+
+        if (1 - pow(d/limit, 4.0) <= 0) {
+            continue;
+        }
+
+        // get light specs
+        vec3 tint = light[0].yzw;
+        float shadow = light[1].x;
+        float radius = light[1].y;
+        float power = light[1].z;
+
+        // determine whether the normal hits the light.
+        // part of the code from https://kylehalladay.com/blog/tutorial/math/2013/12/24/Ray-Sphere-Intersection.html
+        vec3 l = lightPos-position;
+        float lengthOfN = dot(l, normalize(normal));
+        float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+        bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
+
+        if (intersect){
+            color += tint*(power/(4*3.1415*d*d));
+        }
+        else{
+            color += tint*(power/(4*3.1415*d*d))*dot(normalize(l), normalize(normal));
+        }
+    }
+    return color;
+}
 
 void main() {
     vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
@@ -70,8 +124,10 @@ void main() {
 
     vec3 I = position - cameraPosition;
     vec3 R = reflect(normalize(I), normalize(newNormal));
-    outColor = toneMapReinhard(rgbe2rgb(texture(cubeMapTexture, R)));
-    //outColor = texture(cubeMapTexture, R).xyz;
+
+    vec3 baseColor = rgbe2rgb(texture(cubeMapTexture, R));
+
+    outColor = toneMapReinhard(baseColor + getSphereLight(R));
 
 }
 
