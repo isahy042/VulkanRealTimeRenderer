@@ -42,7 +42,7 @@ layout(location = 0) out vec3 outColor;
 
 // Apply Reinhard tone mapping operator
 vec3 toneMapReinhard(vec3 linearRGB) {
-    float exposure = 1.0;
+    float exposure =1.0;
     return linearRGB / (linearRGB + vec3(1.0)) * exposure;
 }
 
@@ -73,6 +73,16 @@ vec3 rgbe2rgb(vec4 rgbe) {
     return exp2(exponent - 128) * ((rgbe.xyz+ 0.5)/256);
 }
 
+// functions for calculating BRDF
+//https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation
+
+float mixBRDF(float brdf1, float brdf2, float p){
+    return (p*brdf1) + ((1-p)*brdf2);
+}
+
+vec3 mixColor(vec3 c1, vec3 c2, float p){
+    return (p*c1) +((1-p)*c2);
+}
 
 void main() {
     float roughness = gammaEncode(texture(roughnessTexture, surfaceNormal).xyz).x;
@@ -84,12 +94,15 @@ void main() {
     float NoV = clamp(dot(normalize(surfaceNormal), normalize(-I)), 0, 1.0); //cosine theta
     vec3 reflected = reflect(normalize(I), normalize(surfaceNormal));
 
-    vec3 PrefilteredColor = rgbe2rgb(textureLod(mipmapTexture, reflected, round(roughness/0.2)));
-    vec3 baseColor = albedo * PrefilteredColor;
+    vec3 prefilteredColor = rgbe2rgb(textureLod(mipmapTexture, reflected, roughness/0.2));
 
-    vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(1.0-roughness,  NoV)).xyz).xy;
+    vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(roughness,  NoV)).xyz).xy;
     vec3 c = (vec3(1) * EnvBRDF.x) + EnvBRDF.y;
 
-    outColor = c * baseColor;
+    vec3 metal_brdf = prefilteredColor * c;
 
+    vec3 dielectric_brdf = mixColor(albedo/3.14159, prefilteredColor,
+       1-((0.04 * EnvBRDF.x) + EnvBRDF.y));
+
+    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness));
 }

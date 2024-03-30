@@ -415,7 +415,7 @@ Vec3f randomOnUnitHemisphere(Vec3f normal) {
 // helper functions for material cubemap parsing.
 void makeLambertianCubeMap(string inFilename) {
 	int inWidth, inHeight, texChannels;
-	string in = "s72-main/examples/" + inFilename;
+	string in = "s72-main/examples/texture/" + inFilename;
 	string outFilename = "lambertian-map-" + inFilename;
 
 	const char* inc = in.c_str();
@@ -549,7 +549,7 @@ void makeLambertianCubeMap(string inFilename) {
 		}
 	}
 
-	string on = "s72-main/examples/" + outFilename;
+	string on = "s72-main/examples/texture/" + outFilename;
 	const char* onc = on.c_str();
 	//stbi__create_png_image();
 	stbi_write_png(onc, outWidth, outWidth * 6, 4, outImgArr, 4 * outWidth);
@@ -585,7 +585,7 @@ Vec3f ImportanceSampleGGX(Vec2f Xi, float Roughness, Vec3f N)
 void makePBRCubeMap(string inFilename, float roughness, int index) {
 	cout << "\n generating cube map for file " << inFilename << " at roughness " << roughness;
 	int inWidth, inHeight, texChannels;
-	string in = "s72-main/examples/" + inFilename;
+	string in = "s72-main/examples/texture/" + inFilename;
 	string outFilename = "pbr-map-" + to_string(index) + "-" + inFilename;
 
 	const char* inc = in.c_str();
@@ -711,17 +711,15 @@ void makePBRCubeMap(string inFilename, float roughness, int index) {
 		}
 	}
 
-	string on = "s72-main/examples/" + outFilename;
+	string on = "s72-main/examples/texture/" + outFilename;
 	const char* onc = on.c_str();
 	//stbi__create_png_image();
 
 	stbi_write_png(onc, outWidth, outWidth * 6, 4, outImgArr, 4 * outWidth);
 }
 
-// is this right???
 float G_Smith(float Roughness, float NoV, float NoL) {
-	return 1.0f;
-	float k = (Roughness + 1) * (Roughness + 1) / 8.0f;
+	float k = (Roughness*Roughness)/2.f;//(Roughness + 1)* (Roughness + 1) / 8.0f;
 	float G_V = NoV / (NoV * (1.0f - k) + k);
 	float G_L = NoL / (NoL * (1.0f - k) + k);
 	return G_V * G_L;
@@ -731,7 +729,7 @@ void makePBRLUT() {
 	string outFilename = "pbr-map.png";
 
 	//  Vec4f, 2D vector to store new map
-	int outWidth = 32;
+	const int outWidth = 128;
 
 	vector<vector<Vec4f>> outImg(outWidth);
 	for (int h = 0; h < outWidth; h++) {
@@ -740,14 +738,14 @@ void makePBRLUT() {
 
 	Vec3f V;
 	Vec3f normal = Vec3f(0, 0, 1);
-	float roughness = 0.f;
+	float roughness = 1.f;
 	float roughnessIncrement = (1.f / (outWidth - 1));
-	float NoV = 1.f;
+	float NoV = 0.001f;
 	float NoVIncrement = 1.f / (outWidth - 1);
 
 	for (int h = 0; h < outWidth; h++) {
 		for (int w = 0; w < outWidth; w++) {
-			
+			NoV = max(0.001f, w*NoVIncrement);
 			V.x = sqrt(1.0f - (NoV * NoV)); // sin
 			V.y = 0;
 			V.z = NoV; // cos
@@ -755,11 +753,11 @@ void makePBRLUT() {
 			float A = 0;
 			float B = 0;
 
-			for (int s = 0; s < 1000; s++) {
+			for (int s = 0; s < 5000; s++) {
 
 				Vec2f Xi = Vec2f(randf(), randf());
 				Vec3f H = normalize(ImportanceSampleGGX(Xi, roughness, normal));
-				Vec3f L = 2 * dot(normalize(V), normalize(-H)) * (-H) - V;
+				Vec3f L = 2 * dot(normalize(V), normalize(H)) * (H) - V;
 
 				float NoL = clamp(L.z,0.f,1.f);
 				float NoH = clamp(H.z, 0.f, 1.f); // always 1.
@@ -775,25 +773,26 @@ void makePBRLUT() {
 				if (NoL > 0)
 				{
 					float G = G_Smith(roughness, NoV, NoL);
+					//assert(NoV > 0);
 					float G_Vis = G * VoH / (NoH * NoV);
-					float Fc = pow(1 - VoH, 5);
+					float Fc = std::pow(1 - VoH, 5);
 					A += (1 - Fc) * G_Vis;
 					B += Fc * G_Vis;
+					assert(A == A && B == B); //detect nans
 
 				}
 
-			}
 
-			Vec2f finalSamples = Vec2f(A, B) / 1000;
+			}
+			Vec2f finalSamples = Vec2f(A, B) / 5000;
 			outImg[h][w] = Vec4f(finalSamples.x, finalSamples.y, 0.f, 0.f);
-			NoV -= NoVIncrement;
+			
 		}
-		NoV = 1.f;
-		roughness += roughnessIncrement;
+		roughness -= roughnessIncrement;
 	}
 	
 
-	stbi_uc outImgArr[32 * 4 * 32]; // allocate this for now, may not use whole array
+	stbi_uc outImgArr[outWidth* outWidth*4]; // allocate this for now, may not use whole array
 	int p = 0;
 	for (int h = 0; h < outWidth; h++) {
 		for (int w = 0; w < outWidth; w++) {
@@ -805,7 +804,7 @@ void makePBRLUT() {
 		}
 	}
 
-	string on = "s72-main/examples/" + outFilename;
+	string on = "s72-main/examples/texture/" + outFilename;
 	const char* onc = on.c_str();
 
 	stbi_write_png(onc, outWidth, outWidth, 4, outImgArr, 4 * outWidth);
