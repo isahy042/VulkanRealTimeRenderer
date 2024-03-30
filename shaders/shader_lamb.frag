@@ -74,7 +74,7 @@ vec3 getSphereLight(vec3 normal){
     vec3 color = vec3(0.);
     mat4 light;
 
-    // iterate through ights, break out early if possible
+    // iterate through lights, break out early if possible
     for (int i = 0; i < 10; i++){
         
         light = sphereLight[i].data;
@@ -86,8 +86,8 @@ vec3 getSphereLight(vec3 normal){
         float limit = light[1].w;        
         vec3 lightPos = vec3(sphereLight[i].model * vec4(0.0,0.0,0.0,1.0));
         float d = length(position - lightPos);
-
-        if (1 - pow(d/limit, 4.0) <= 0) {
+        float cutoff = 1 - pow(d/limit, 4.0);
+        if (cutoff <= 0) {
             continue;
         }
 
@@ -98,30 +98,80 @@ vec3 getSphereLight(vec3 normal){
         float power = light[1].z;
 
         // determine whether the normal hits the light.
-        // part of the code from https://kylehalladay.com/blog/tutorial/math/2013/12/24/Ray-Sphere-Intersection.html
+        // logic of the code (for this and all sphere intersection in shader light processing)
+        // from https://kylehalladay.com/blog/tutorial/math/2013/12/24/Ray-Sphere-Intersection.html
         vec3 l = lightPos-position;
         float lengthOfN = dot(l, normalize(normal));
         float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
         bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
 
         if (intersect){
-            color += tint*(power/(4*3.1415*d*d));
+            color += tint*(power/(4*3.1415*d*d))*cutoff;
         }
         else{
-            color += tint*(power/(4*3.1415*d*d))*dot(normalize(l), normalize(normal));
+            color += tint*(power/(4*3.1415*d*d))*dot(normalize(l), normalize(normal))*cutoff;
         }
     }
     return color;
 }
 
-// vec3 getSpotLight(){
-//     vec3 color = vec3(0.);
-//     for (int i = 0; i++; i<10){
-//         if (spotLight[i][0][0]<1) {break;}
+vec3 getSpotLight(vec3 normal){
+    vec3 color = vec3(0.);
+    mat4 light;
+    // iterate through lights, break out early if possible
+    for (int i = 0; i < 10; i++){
+        
+        light = spotLight[i].data;
+        if (light[0][0]<1) {
+            break;
+        }
 
-//     }
-//     return color;
-// }
+        // check if in range of illumination
+        float limit = light[1].w;        
+        vec3 lightPos = vec3(spotLight[i].model * vec4(0.0,0.0,0.0,1.0));
+        float d = length(position - lightPos);
+        float cutoff = 1 - pow(d/limit, 4.0);
+        if (cutoff <= 0) {
+            continue;
+        }
+
+        // get light specs
+        vec3 tint = light[0].yzw;
+        float shadow = light[1].x;
+        float radius = light[1].y;
+        float power = light[1].z;
+        float fov = light[2].x;
+        float blend = light[2].y;
+        vec3 lightDirection = light[3].xyz;
+
+        // determine the fov.
+        vec3 l = lightPos - position;
+        vec3 pointOnSphere = lightPos - (normalize(l) * radius);
+        // get fov with the closest point on the sphere
+        float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
+        
+        // we will hit the object. assign color.
+        if (fov/2 >= currentFov){
+            // update the cutoff adjustment factor identical to sphere light
+            float lengthOfN = dot(l, normalize(normal));
+            float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+            bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
+            if (!intersect){
+                cutoff *= dot(normalize(l), normalize(normal));
+            }
+
+            // if fully illuminated 
+            if (fov * (1-blend)/2 >= currentFov){
+                color += tint*(power/(4*3.1415*d*d))*cutoff;
+            } else{
+                float blendingFactor = (currentFov - (fov * (1-blend)/2))/((fov/2)-(fov * (1-blend)/2));
+                color += tint*(power/(4*3.1415*d*d))*cutoff*(1-blendingFactor);
+            }
+        }
+
+    }
+    return color;
+}
 
 // vec3 getSunLight(){
 //     vec3 color = vec3(0.);
@@ -144,6 +194,6 @@ void main() {
 
     vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * rgbe2rgb(texture(albedoTexture, newNormal));
 
-    outColor = toneMapReinhard(c+getSphereLight(newNormal));
+    outColor = toneMapReinhard(c+getSphereLight(newNormal)+getSpotLight(newNormal));
 }
 

@@ -1162,9 +1162,9 @@ private:
 				sphereind++;
 			}
 			else if (light->getType() == 1 && spotind < MAX_LIGHT) { //spot
-				/*cout << "\n showing spot light at " << i;
-				view44(light->getTransformationMatrix(), "\n trans");
-				view44(light->getDataMatrix(), "\n data");*/
+				//cout << "\n showing spot light at " << i;
+				//view44(light->getTransformationMatrix(), "\n trans");
+				//view44(light->getDataMatrix(), "\n data");
 
 				memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
 				spotind++;
