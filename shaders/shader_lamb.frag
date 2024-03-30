@@ -173,14 +173,33 @@ vec3 getSpotLight(vec3 normal){
     return color;
 }
 
-// vec3 getSunLight(){
-//     vec3 color = vec3(0.);
-//     for (int i = 0; i++; i<5){
-//         if (sunLight[i][0][0]<1) {break;}
+vec3 getSunLight(vec3 normal){
+    vec3 color = vec3(0.);
+    mat4 light;
+    // iterate through lights, break out early if possible
+    for (int i = 0; i < 10; i++){
+        
+        light = sunLight[i].data;
+        if (light[0][0]<1) {
+            break;
+        }
 
-//     }
-//     return color;
-// }
+        // we assume sun is infinity away
+        // get light specs
+        vec3 tint = light[0].yzw;
+        float shadow = light[1].x;
+        float angle = light[1].y;
+        float strength = light[1].z;
+        vec3 lightDirection = light[2].xyz;
+
+        // determine the fov.
+        if (acos(dot(normalize(normal), -normalize(lightDirection)))<=angle/2){
+            color += strength * tint;
+        }
+        
+    }
+    return color;
+}
 
 void main() {
     for (int i = 0; i<3; i++){
@@ -194,6 +213,6 @@ void main() {
 
     vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * rgbe2rgb(texture(albedoTexture, newNormal));
 
-    outColor = toneMapReinhard(c+getSphereLight(newNormal)+getSpotLight(newNormal));
+    outColor = toneMapReinhard(c+getSphereLight(newNormal)+getSpotLight(newNormal)+getSunLight(newNormal));
 }
 

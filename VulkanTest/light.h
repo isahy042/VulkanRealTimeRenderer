@@ -27,6 +27,8 @@ public:
     string name = "";
     Vec3f tint = Vec3f(1.f);
     Vec3f pos = Vec3f(0.f);
+    Vec3f direction = Vec3f(0, 0, -1);
+
     Vec44f transMat = Vec44f(Vec4f(0.f));
     int type = 2;
 
@@ -60,6 +62,7 @@ public:
     }
     void setTransformationMatrix(Vec44f m) override {
         pos = transformPos(m, Vec3f(0.f));
+        direction = transformDir(m, Vec3f(0, 0, -1));
         transMat = m;
     }
     Vec44f getTransformationMatrix() override {
@@ -68,7 +71,7 @@ public:
     Vec44f getDataMatrix() override {
         return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z), 
             Vec4f(shadow, angle, strength, 0.f), 
-            Vec4f(0.f), 
+            Vec4f(direction.x, direction.y, direction.z,0.f),
             Vec4f(0.f));
     }
     int getType() override { return type; };
