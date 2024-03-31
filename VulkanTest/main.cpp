@@ -315,7 +315,7 @@ private:
 		// testing this:
 		// TODO: not hardcode in the specular map for the environment cube.
 		//makeLambertianCubeMap("ocean-map.png");
-		//makeLambertianCubeMap("grass.png");
+		makeLambertianCubeMap("grass.png");
 
 		//float roughness = 0.f;
 		//for (int r = 0; r < 6; r++) {

@@ -77,7 +77,6 @@ void main() {
         (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 
         (normalColor.x * tang.y) + (normalColor.y * bitang.y) +(normalColor.z * surfaceNormal.y),
         (normalColor.x * tang.z) + (normalColor.y * bitang.z) +(normalColor.z * surfaceNormal.z));
-
     outColor = toneMapReinhard(rgbe2rgb(texture(cubeMapTexture, newNormal)));
     //outColor = texture(cubeMapTexture, newNormal);
 }

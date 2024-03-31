@@ -517,7 +517,7 @@ void makeLambertianCubeMap(string inFilename) {
 			}	
 
 			outImg[h][w] = 2 * sampledColor / (float)validNum;
-			//outImg[h][w].w = 0.502;
+			outImg[h][w].w = 0.502;
 		}
 	}
 

@@ -202,9 +202,7 @@ vec3 getSunLight(vec3 normal){
 }
 
 void main() {
-    for (int i = 0; i<3; i++){
-        break;
-    }
+
     vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
     vec3 newNormal = vec3(
         (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 
