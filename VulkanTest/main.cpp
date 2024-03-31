@@ -315,11 +315,11 @@ private:
 		// testing this:
 		// TODO: not hardcode in the specular map for the environment cube.
 		//makeLambertianCubeMap("ocean-map.png");
-		makeLambertianCubeMap("grass.png");
+		//makeLambertianCubeMap("white.png");
 
 		//float roughness = 0.f;
 		//for (int r = 0; r < 6; r++) {
-		//	makePBRCubeMap("grass.png", roughness, r);
+		//	makePBRCubeMap("white.png", roughness, r);
 		//	roughness += 0.2f;
 		//}
 
@@ -341,7 +341,10 @@ private:
 		else if (glfwGetKey(window, GLFW_KEY_DOWN)) scene.cameraRot.x += 0.01f;
 		else if (glfwGetKey(window, GLFW_KEY_UP)) scene.cameraRot.x -= 0.01f;
 
-		else if (glfwGetKey(window, GLFW_KEY_R)) scene.cameraMovement = Vec3f(0.f);
+		else if (glfwGetKey(window, GLFW_KEY_R)) { 
+			scene.cameraMovement = Vec3f(0.f); 
+			scene.cameraRot = Vec4f(0,0,0,1);
+		}
 
 		else if (glfwGetKey(window, GLFW_KEY_C) && keyboardInput == 0) {  
 			scene.updateFrustum = !scene.updateFrustum; 

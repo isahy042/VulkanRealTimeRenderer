@@ -101,13 +101,13 @@ vec3 getSphereLight(vec3 normal){
         // part of the code from https://kylehalladay.com/blog/tutorial/math/2013/12/24/Ray-Sphere-Intersection.html
         vec3 l = lightPos-position;
         float lengthOfN = dot(l, normalize(normal));
-        float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+        float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
         bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
 
         if (intersect){
             color += tint*(power/(4*3.1415*d*d))*cutoff;
         }
-        else{
+        else if ((lengthOfN >= 0.0)){
             color += tint*(power/(4*3.1415*d*d))*dot(normalize(l), normalize(normal))*cutoff;
         }
     }
@@ -150,10 +150,10 @@ vec3 getSpotLight(vec3 normal){
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
         
         // we will hit the object. assign color.
-        if (fov/2 >= currentFov){
+        if (fov/2 >= currentFov&& dot(-normalize(pointOnSphere-position), normalize(lightDirection))>=0){
             // update the cutoff adjustment factor identical to sphere light
             float lengthOfN = dot(l, normalize(normal));
-            float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+            float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
             bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
             if (!intersect){
                 cutoff *= dot(normalize(l), normalize(normal));

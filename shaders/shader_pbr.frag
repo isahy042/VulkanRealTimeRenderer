@@ -30,6 +30,10 @@ layout(binding = 10) uniform LightObject3 {
     mat4 data;
 } sunLight[5];
 
+layout (binding = 11) uniform sampler2DShadow sphereShadow[10];
+layout (binding = 12) uniform sampler2DShadow spotShadow[10];
+layout (binding = 13) uniform sampler2DShadow sunShadow[5];
+
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
 layout(location = 2) in vec3 cameraPosition;
@@ -115,18 +119,15 @@ vec3 getSphereLight(vec3 normal){
         float power = light[1].z;
 
         // determine whether the normal hits the light.
-        // logic of the code (for this and all sphere intersection in shader light processing)
-        // from https://kylehalladay.com/blog/tutorial/math/2013/12/24/Ray-Sphere-Intersection.html
         vec3 l = lightPos-position;
         float lengthOfN = dot(l, normalize(normal));
-        float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+        float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
         bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
-
         if (intersect){
-            color += tint*(power/(4*3.1415*d*d))*cutoff;
+            color += tint*(power/(4*3.1415*d*d))*cutoff *dot(normalize(l), normalize(normal)); //?
         }
-        else{
-            color += tint*(power/(4*3.1415*d*d))*dot(normalize(l), normalize(normal))*cutoff;
+        else if (lengthOfN >= 0.0){
+            color += tint*(power/(4*3.1415*d*d))*cutoff*dot(normalize(l), normalize(normal));
         }
     }
     return color;
@@ -168,14 +169,13 @@ vec3 getSpotLight(vec3 normal){
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
         
         // we will hit the object. assign color.
-        if (fov/2 >= currentFov){
+        if (fov/2 >= currentFov && dot(-normalize(pointOnSphere-position), normalize(lightDirection))>=0){
             // update the cutoff adjustment factor identical to sphere light
             float lengthOfN = dot(l, normalize(normal));
-            float len = sqrt((lengthOfN*lengthOfN) - (length(l)*length(l)));
+            float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
             bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
-            if (!intersect){
-                cutoff *= dot(normalize(l), normalize(normal));
-            }
+
+            cutoff *= dot(normalize(l), normalize(normal));
 
             // if fully illuminated 
             if (fov * (1-blend)/2 >= currentFov){
