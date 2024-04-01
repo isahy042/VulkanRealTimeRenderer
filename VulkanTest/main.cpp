@@ -151,7 +151,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/simple-light.s72";//lights - Mix.s72";//sg-Articulation.s72";//simple-light
+	string s72filepath = "s72-main/examples/shadow.s72";//lights - Mix.s72";//sg-Articulation.s72";//simple-light
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -1516,7 +1516,7 @@ private:
 	}
 
 	// descriptor pool
-	void createDescriptorSetLayout() {
+	void createDescriptorSetLayout() { //descriptor set adding
 		VkDescriptorSetLayoutBinding uboLayoutBinding{};
 		uboLayoutBinding.binding = 0;
 		uboLayoutBinding.descriptorCount = 1;
@@ -1600,12 +1600,37 @@ private:
 		lightLayoutBinding2.pImmutableSamplers = nullptr;
 		lightLayoutBinding2.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		// sphere shadow
+		VkDescriptorSetLayoutBinding samplerLayoutBinding8{};
+		samplerLayoutBinding8.binding = 11;
+		samplerLayoutBinding8.descriptorCount = MAX_LIGHT;
+		samplerLayoutBinding8.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding8.pImmutableSamplers = nullptr;
+		samplerLayoutBinding8.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// spot shadow
+		VkDescriptorSetLayoutBinding samplerLayoutBinding9{};
+		samplerLayoutBinding9.binding = 12;
+		samplerLayoutBinding9.descriptorCount = MAX_LIGHT;
+		samplerLayoutBinding9.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding9.pImmutableSamplers = nullptr;
+		samplerLayoutBinding9.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// sun shadow
+		VkDescriptorSetLayoutBinding samplerLayoutBinding10{};
+		samplerLayoutBinding10.binding = 13;
+		samplerLayoutBinding10.descriptorCount = MAX_SUN_LIGHT;
+		samplerLayoutBinding10.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding10.pImmutableSamplers = nullptr;
+		samplerLayoutBinding10.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		// TODO: displacement, normal.
-		std::array<VkDescriptorSetLayoutBinding, 11> bindings = 
+		std::array<VkDescriptorSetLayoutBinding, 14> bindings = 
 		{ uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,
 			samplerLayoutBinding3 ,samplerLayoutBinding4 ,samplerLayoutBinding5,
 			samplerLayoutBinding6, samplerLayoutBinding7, lightLayoutBinding,
-			lightLayoutBinding1,lightLayoutBinding2 };
+			lightLayoutBinding1,lightLayoutBinding2,samplerLayoutBinding8,
+		samplerLayoutBinding9, samplerLayoutBinding10};
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1617,11 +1642,13 @@ private:
 		}
 	}
 
-	void createDescriptorPool() {
+	void createDescriptorPool() {//descriptor set adding
 
-		std::array<VkDescriptorPoolSize, 11> poolSizes{};
+		std::array<VkDescriptorPoolSize, 14> poolSizes{};
+		// uniform buffer
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		// cube maps and 2D samplers
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1636,12 +1663,20 @@ private:
 		poolSizes[6].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 		poolSizes[7].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[7].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
+		// light uniform buffers
 		poolSizes[8].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[8].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
 		poolSizes[9].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[9].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
 		poolSizes[10].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[10].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_SUN_LIGHT);
+		// shadow map samplers
+		poolSizes[11].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[11].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
+		poolSizes[12].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[12].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
+		poolSizes[13].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[13].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_SUN_LIGHT);
 
 
 		VkDescriptorPoolCreateInfo poolInfo{};
@@ -1655,7 +1690,7 @@ private:
 		}
 	}
 
-	void createDescriptorSets() {
+	void createDescriptorSets() {//descriptor set adding
 		std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * totalObjects, descriptorSetLayout);
 
 		VkDescriptorSetAllocateInfo allocInfo{};
@@ -1726,7 +1761,7 @@ private:
 				imageInfo7.imageView = textureImageView[materialIndex][6];
 				imageInfo7.sampler = textureSampler[materialIndex][6];
 
-				std::array<VkWriteDescriptorSet, 11> descriptorWrites{};
+				std::array<VkWriteDescriptorSet, 14> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -1797,30 +1832,53 @@ private:
 				std::array<VkDescriptorBufferInfo, MAX_LIGHT> bufferInfoSphere;
 				std::array<VkDescriptorBufferInfo, MAX_LIGHT> bufferInfoSpot;
 				std::array<VkDescriptorBufferInfo, MAX_SUN_LIGHT> bufferInfoSun;
+
+				std::array<VkDescriptorImageInfo, MAX_LIGHT> shadowInfoSphere;
+				std::array<VkDescriptorImageInfo, MAX_LIGHT> shadowInfoSpot;
+				std::array<VkDescriptorImageInfo, MAX_SUN_LIGHT> shadowInfoSun;
 				
 
 				for (size_t j = 0; j < MAX_LIGHT; j++) {
-					VkDescriptorBufferInfo bi1{};
-					bi1.buffer = { spherelightBuffers[obj][i][j] };
-					bi1.offset = 0;
-					bi1.range = sizeof(LightObject);
+					VkDescriptorBufferInfo sphereBuffer{};
+					sphereBuffer.buffer = { spherelightBuffers[obj][i][j] };
+					sphereBuffer.offset = 0;
+					sphereBuffer.range = sizeof(LightObject);
 
-					VkDescriptorBufferInfo bi2{};
-					bi2.buffer = { spotlightBuffers[obj][i][j] };
-					bi2.offset = 0;
-					bi2.range = sizeof(LightObject);
+					VkDescriptorBufferInfo spotBuffer{};
+					spotBuffer.buffer = { spotlightBuffers[obj][i][j] };
+					spotBuffer.offset = 0;
+					spotBuffer.range = sizeof(LightObject);
 
-					bufferInfoSphere[j] = bi1;
-					bufferInfoSpot[j] = bi2;
+					VkDescriptorImageInfo sphereShadow{};
+					sphereShadow.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					sphereShadow.imageView = textureImageView[materialIndex][3];
+					sphereShadow.sampler = textureSampler[materialIndex][3];
+
+					VkDescriptorImageInfo spotShadow{};
+					spotShadow.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					spotShadow.imageView = textureImageView[materialIndex][3];
+					spotShadow.sampler = textureSampler[materialIndex][3];
+
+					bufferInfoSphere[j] = sphereBuffer;
+					bufferInfoSpot[j] = spotBuffer;
+
+					shadowInfoSphere[j] = sphereShadow;
+					shadowInfoSpot[j] = spotShadow;
 				}
 
 				for (size_t j = 0; j < MAX_SUN_LIGHT; j++) {
-					VkDescriptorBufferInfo bi1{};
-					bi1.buffer = { sunlightBuffers[obj][i][j] };
-					bi1.offset = 0;
-					bi1.range = sizeof(LightObject);
+					VkDescriptorBufferInfo sunBuffer{};
+					sunBuffer.buffer = { sunlightBuffers[obj][i][j] };
+					sunBuffer.offset = 0;
+					sunBuffer.range = sizeof(LightObject);
 
-					bufferInfoSun[j] = bi1;
+					VkDescriptorImageInfo sunShadow{};
+					sunShadow.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					sunShadow.imageView = textureImageView[materialIndex][3];
+					sunShadow.sampler = textureSampler[materialIndex][3];
+
+					bufferInfoSun[j] = sunBuffer;
+					shadowInfoSun[j] = sunShadow;
 				}
 
 				descriptorWrites[8].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1846,6 +1904,30 @@ private:
 				descriptorWrites[10].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 				descriptorWrites[10].descriptorCount = MAX_SUN_LIGHT;
 				descriptorWrites[10].pBufferInfo = bufferInfoSun.data();
+
+				descriptorWrites[11].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[11].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[11].dstBinding = 11;
+				descriptorWrites[11].dstArrayElement = 0;
+				descriptorWrites[11].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[11].descriptorCount = MAX_LIGHT;
+				descriptorWrites[11].pImageInfo = shadowInfoSphere.data();
+
+				descriptorWrites[12].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[12].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[12].dstBinding = 12;
+				descriptorWrites[12].dstArrayElement = 0;
+				descriptorWrites[12].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[12].descriptorCount = MAX_LIGHT;
+				descriptorWrites[12].pImageInfo = shadowInfoSpot.data();
+
+				descriptorWrites[13].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[13].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[13].dstBinding = 13;
+				descriptorWrites[13].dstArrayElement = 0;
+				descriptorWrites[13].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[13].descriptorCount = MAX_SUN_LIGHT;
+				descriptorWrites[13].pImageInfo = shadowInfoSun.data();
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}

@@ -31,6 +31,9 @@ layout(binding = 10) uniform LightObject3 {
     mat4 data;
 } sunLight[5];
 
+layout (binding = 11) uniform sampler2DShadow sphereShadow[10];
+layout (binding = 12) uniform sampler2DShadow spotShadow[10];
+layout (binding = 13) uniform sampler2DShadow sunShadow[5];
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -194,9 +197,10 @@ vec3 getSunLight(vec3 normal){
         vec3 lightDirection = light[2].xyz;
 
         // determine the fov.
-        if (acos(dot(normalize(normal), -normalize(lightDirection)))<=angle/2){
-            color += strength * tint;
-        }
+        // if (acos(dot(normalize(normal), -normalize(lightDirection)))<=angle){
+        //     color += strength * tint;
+        // }
+         color += strength * tint;
         
     }
     return color;
