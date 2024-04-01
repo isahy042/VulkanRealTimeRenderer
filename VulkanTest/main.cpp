@@ -1223,7 +1223,10 @@ private:
 		auto startTime = std::chrono::high_resolution_clock::now();
 		
 		// scene processing
+		// this should ideally only be called if there has been a change to the scene.
+		// TODO: add very simple optimization
 		scene.updateSceneTransformMatrix(currentFrameIndex);
+		//update shadow map
 		scene.cull();
 		for (int obj = 0; obj < totalObjects; obj++) {
 			if (isCulling && !scene.objects[obj].inFrame) continue;
@@ -1237,7 +1240,8 @@ private:
 
 			vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
 			recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-		
+			//saveImg("savedImg.ppm");
+
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -1280,7 +1284,6 @@ private:
 			else if (result != VK_SUCCESS) {
 				throw std::runtime_error("failed to present swap chain image!");
 			}
-			//recreateSwapChain();
 
 		
 		currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
@@ -1347,8 +1350,6 @@ private:
 
 			// Free the memory
 			vkFreeMemory(device, stagingBufferMemory , nullptr);
-
-
 	}
 
 

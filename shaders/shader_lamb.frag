@@ -155,7 +155,7 @@ vec3 getSpotLight(vec3 normal){
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
         
         // we will hit the object. assign color.
-        if (fov/2 >= currentFov && dot(-normalize(pointOnSphere-position), normalize(lightDirection))>=0){
+        if (fov/2 >= currentFov && dot(normalize(l), normalize(normal))>0){
             // update the cutoff adjustment factor identical to sphere light
             float lengthOfN = dot(l, normalize(normal));
             float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
