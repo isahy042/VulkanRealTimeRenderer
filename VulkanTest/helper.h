@@ -31,6 +31,12 @@ inline int clip(int i, int min, int max) {
     i = (i > max) ? max : i;
     return i;
 }
+
+inline float clip(float i, float min, float max) {
+    i = (i < min) ? min : i;
+    i = (i > max) ? max : i;
+    return i;
+}
 /**
 Transformation Conversion 
 */

@@ -183,7 +183,7 @@ private:
 	VkQueue presentQueue;
 	
 	VkSwapchainKHR swapChain;
-	std::vector<VkImage> swapChainImages;
+	vector<VkImage> swapChainImages;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 
@@ -211,8 +211,10 @@ private:
 
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
-	VkSemaphore shadowSemaphore;
+	vector<VkSemaphore> shadowSemaphores;
+	vector<VkSemaphore> shadowFinishedSemaphores;
 	std::vector<VkFence> inFlightFences;
+	std::vector<VkFence> shadowFences;
 	uint32_t currentFrame = 0;
 
 	bool framebufferResized = false;
@@ -227,17 +229,17 @@ private:
 	vector<vector<void*>> uniformBuffersMapped;
 
 	// light buffers
-	vector < vector<vector<VkBuffer>>> sunlightBuffers;
-	vector < vector<vector<VkDeviceMemory>>> sunlightBuffersMemory;
-	vector < vector<vector<void*>>> sunlightBuffersMapped;
+	vector<vector<vector<VkBuffer>>> sunlightBuffers;
+	vector<vector<vector<VkDeviceMemory>>> sunlightBuffersMemory;
+	vector<vector<vector<void*>>> sunlightBuffersMapped;
 
-	vector < vector<vector<VkBuffer>>> spherelightBuffers;
-	vector < vector<vector<VkDeviceMemory>>> spherelightBuffersMemory;
-	vector < vector<vector<void*>>> spherelightBuffersMapped;
+	vector<vector<vector<VkBuffer>>> spherelightBuffers;
+	vector<vector<vector<VkDeviceMemory>>> spherelightBuffersMemory;
+	vector<vector<vector<void*>>> spherelightBuffersMapped;
 
-	vector < vector<vector<VkBuffer>>> spotlightBuffers;
-	vector < vector<vector<VkDeviceMemory>>> spotlightBuffersMemory;
-	vector < vector<vector<void*>>> spotlightBuffersMapped;
+	vector<vector<vector<VkBuffer>>> spotlightBuffers;
+	vector<vector<vector<VkDeviceMemory>>> spotlightBuffersMemory;
+	vector<vector<vector<void*>>> spotlightBuffersMapped;
 
 	// shadows
 	VkRenderPass shadowRenderPass;
@@ -474,6 +476,7 @@ private:
 
 		vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 		vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+		vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &shadowQueue);
 
 	}
 
@@ -804,7 +807,6 @@ private:
 		return shaderModule;
 	}
 
-
 	void createGraphicsPipeline(int materialIndex) {
 
 		auto vertShaderCode = readFile("shaders/"+ scene.materials[materialIndex]->getVertshader());
@@ -946,7 +948,7 @@ private:
 		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR ;
 
 		VkAttachmentDescription depthAttachment{};
 		depthAttachment.format = findDepthFormat();
@@ -1116,7 +1118,10 @@ private:
 
 		imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 		renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		shadowSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		shadowFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 		inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+		shadowFences.resize(MAX_FRAMES_IN_FLIGHT);
 
 		VkSemaphoreCreateInfo semaphoreInfo{};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1128,9 +1133,12 @@ private:
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 			if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
 				vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-				vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create synchronization objects for a frame!");
-			}
+				vkCreateSemaphore(device, &semaphoreInfo, nullptr, &shadowSemaphores[i]) != VK_SUCCESS ||
+				vkCreateSemaphore(device, &semaphoreInfo, nullptr, &shadowFinishedSemaphores[i]) != VK_SUCCESS ||
+				vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS ||
+				vkCreateFence(device, &fenceInfo, nullptr, &shadowFences[i]) != VK_SUCCESS) {
+					throw std::runtime_error("failed to create synchronization objects for a frame!");
+				}
 		}
 	}
 
@@ -1235,8 +1243,7 @@ private:
 		shadowImageInfo.arrayLayers = 1;
 		shadowImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		shadowImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		shadowImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-		// | VK_IMAGE_USAGE_SAMPLED_BIT; // not necessary for what im trying to do
+		shadowImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // ?
 		shadowImageInfo.queueFamilyIndexCount = 0;
 		shadowImageInfo.pQueueFamilyIndices = NULL;
 		shadowImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -1279,10 +1286,13 @@ private:
 
 		vkCreateImageView(device, &shadowImageViewInfo, NULL, &shadowImageView[lightIndex]);
 
+		//saveImg("ok.ppm");
+
 	}
 
 	void createShadowMapRenderPass()
 	{
+
 		VkAttachmentDescription attachments[2];
 
 		// Depth attachment (shadow map)
@@ -1382,6 +1392,24 @@ private:
 		multisampling.sampleShadingEnable = VK_FALSE;
 		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+
+		// dynamic viewport and scissor
+		VkPipelineViewportStateCreateInfo viewportState{};
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.viewportCount = 1;
+		viewportState.scissorCount = 1;
+
+		std::vector<VkDynamicState> dynamicStates = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR
+		};
+
+		VkPipelineDynamicStateCreateInfo dynamicState{};
+		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+		dynamicState.pDynamicStates = dynamicStates.data();
+
+
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutInfo.setLayoutCount = 1;
@@ -1397,12 +1425,12 @@ private:
 		pipelineInfo.pStages = shaderStages;
 		pipelineInfo.pVertexInputState = &vertexInputInfo;
 		pipelineInfo.pInputAssemblyState = &inputAssembly; // may remove
-		//pipelineInfo.pViewportState = &viewportState;
+		pipelineInfo.pViewportState = &viewportState;
 		//pipelineInfo.pRasterizationState = &rasterizer;
 		pipelineInfo.pMultisampleState = &multisampling;
 		//pipelineInfo.pDepthStencilState = &depthStencil;
 		//pipelineInfo.pColorBlendState = &colorBlending;
-		//pipelineInfo.pDynamicState = &dynamicState;
+		pipelineInfo.pDynamicState = &dynamicState;
 		pipelineInfo.layout = shadowPipelineLayout[lightIndex];
 		pipelineInfo.renderPass = shadowRenderPass;
 		//pipelineInfo.subpass = 0;
@@ -1415,8 +1443,33 @@ private:
 		vkDestroyShaderModule(device, vertShaderModule, nullptr);
 	}
 
-	void renderShadowMap(VkCommandBuffer commandBuffer, int lightIndex, int imageIndex)
+	void renderShadowMap(VkCommandBuffer commandBuffer, int lightIndex, int imageIndex, uint32_t currentShadow)
 	{
+		cout << "\n waiting for fences..";
+
+		// wait for both last image render and shadow render is over.
+		vkWaitForFences(device, 1, &shadowFences[currentShadow], VK_TRUE, UINT64_MAX);
+		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+		cout << "\n reset fencce";
+
+		VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, shadowSemaphores[currentShadow], VK_NULL_HANDLE, &currentShadow);
+
+		// reset shadow fence.
+		vkResetFences(device, 1, &shadowFences[currentShadow]);
+
+		cout << "\n reset command buffer";
+		// reset command buffer
+		vkResetCommandBuffer(commandBuffer, /*VkCommandBufferResetFlagBits*/ 0);
+
+		VkCommandBufferBeginInfo beginInfo{};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		cout << "\n begin command buffer";
+
+		if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+			throw std::runtime_error("failed to begin recording command buffer!");
+		}
+
+
 
 		int shadowSize = scene.lights[lightIndex]->getShadow();
 
@@ -1448,10 +1501,11 @@ private:
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 		renderPassInfo.pClearValues = clearValues.data();
 
+		cout << "\n begin render pass and binding pipeline";
+
 		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		for (int mat = 0; mat < totalMaterials; mat++) {
-			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline[mat]);
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowGraphicsPipeline[lightIndex]);
 
 			VkViewport viewport;
 			viewport.height = shadowSize;
@@ -1469,38 +1523,71 @@ private:
 			scissor.offset.y = 0;
 			vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-			for (int obj : scene.materials[mat]->getObjList()) {
+			for (int obj = 0; obj < scene.objects.size(); obj++) {
 				if (!scene.objects[obj].inFrame && isCulling) continue;
 				VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 				vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
-				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout[mat], 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipelineLayout[lightIndex], 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
+				cout << "\n drawing objects";
+
 				vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
 			}
-		}
+			cout << "\n end render pass and ocmmand bufer";
+
 		vkCmdEndRenderPass(commandBuffer);
 
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 			throw std::runtime_error("failed to record command buffer!");
 		}
 
+		//VkSubmitInfo submitInfo{};
+		//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+		VkSemaphore waitSemaphores[] = { shadowSemaphores[currentShadow] };
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
+		//submitInfo.waitSemaphoreCount = 1;
+		//submitInfo.pWaitSemaphores = waitSemaphores;
+		//submitInfo.pWaitDstStageMask = waitStages;
+
+		//submitInfo.commandBufferCount = 1;
+		//submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+
+		//VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
+		//submitInfo.signalSemaphoreCount = 1;
+		//submitInfo.pSignalSemaphores = signalSemaphores;
+
+		cout << "\n submitting info";
+
 		VkPipelineStageFlags shadow_map_wait_stages = 0;
 		VkSubmitInfo submit_info = { };
 		submit_info.pNext = NULL;
 		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submit_info.waitSemaphoreCount = 0;
-		submit_info.pWaitSemaphores = NULL;
+		submit_info.waitSemaphoreCount = 1;
+		submit_info.pWaitSemaphores = waitSemaphores;//NULL;
 		submit_info.signalSemaphoreCount = 1;
-		submit_info.pSignalSemaphores = &shadowSemaphore;
-		submit_info.pWaitDstStageMask = 0;
+		submit_info.pSignalSemaphores = &shadowFinishedSemaphores[currentShadow];
+		submit_info.pWaitDstStageMask = waitStages;//VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; //????
 		submit_info.commandBufferCount = 1;
 		submit_info.pCommandBuffers = &commandBuffer;
 
-		vkQueueSubmit(shadowQueue, 1, &submit_info, NULL);
+		//vkQueueSubmit(shadowQueue, 1, &submit_info, NULL);
+		cout << "\n submitting queue";
+
+		if (vkQueueSubmit(shadowQueue, 1, &submit_info, shadowFences[currentShadow]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to submit shadow draw command buffer!");
+		}
+
+		// save shadow map for debugging 
+		saveShadowImg("shadowimg.ppm");
+		cout << "\n queue submitted.";
+
 
 	}
-	void drawFrame() {
+
+	void drawFrame(bool present) {
 
 		// wait for prev frame
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
@@ -1518,7 +1605,7 @@ private:
 
 		// doing this for multiple vertex buffers!
 		auto startTime = std::chrono::high_resolution_clock::now();
-		
+
 		// scene processing
 		// this should ideally only be called if there has been a change to the scene.
 		// TODO: add very simple optimization
@@ -1534,59 +1621,62 @@ private:
 		// Only reset the fence if we are submitting work
 		vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-			vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-			recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-			//saveImg("savedImg.ppm");
+		vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
+		recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+		//saveImg("savedImg.ppm");
 
-			VkSubmitInfo submitInfo{};
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-			VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
-			VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-			submitInfo.waitSemaphoreCount = 1;
-			submitInfo.pWaitSemaphores = waitSemaphores;
-			submitInfo.pWaitDstStageMask = waitStages;
+		VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = waitSemaphores;
+		submitInfo.pWaitDstStageMask = waitStages;
 
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 
-			VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
-			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = signalSemaphores;
+		VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = signalSemaphores;
 
 
-			if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
-				throw std::runtime_error("failed to submit draw command buffer!");
-			}
-		
-			VkPresentInfoKHR presentInfo{};
-			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to submit draw command buffer!");
+		}
 
-			presentInfo.waitSemaphoreCount = 1;
-			presentInfo.pWaitSemaphores = signalSemaphores;
+		if (present) {
+		VkPresentInfoKHR presentInfo{};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
-			VkSwapchainKHR swapChains[] = { swapChain };
-			presentInfo.swapchainCount = 1;
-			presentInfo.pSwapchains = swapChains;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = signalSemaphores;
 
-			presentInfo.pImageIndices = &imageIndex;
+		VkSwapchainKHR swapChains[] = { swapChain };
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = swapChains;
 
-			result = vkQueuePresentKHR(presentQueue, &presentInfo);
+		presentInfo.pImageIndices = &imageIndex;
 
-			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
-				framebufferResized = false;
-				recreateSwapChain();
-			}
-			else if (result != VK_SUCCESS) {
-				throw std::runtime_error("failed to present swap chain image!");
-			}
+		result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+			framebufferResized = false;
+			recreateSwapChain();
+		}
+		else if (result != VK_SUCCESS) {
+			throw std::runtime_error("failed to present swap chain image!");
+		}
+	}
 		
 		currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
 		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		auto time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		saveShadowImg("testing.ppm");
 		//cout << "\n frame time: " << time;
 	}
 
@@ -1614,7 +1704,7 @@ private:
 				HEIGHT,
 				1
 			};
-
+			//cout << "\nsize!" << depthImage.size();
 			vkCmdCopyImageToBuffer(commandBuffer, swapChainImages[currentFrame], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
 			endSingleTimeCommands(commandBuffer);
 
@@ -1633,7 +1723,7 @@ private:
 			// Access and print buffer contents (assuming buffer contains uint32_t data)
 			unsigned char* data = reinterpret_cast<unsigned char*>(mappedMemory);
 			for (size_t i = 0; i < WIDTH * HEIGHT * 4; ++i) {
-				if (i % 4 != 0) file << data[i];
+				if (i % 4 != 3) file << data[i];
 			}
 
 			file.close();
@@ -1648,6 +1738,71 @@ private:
 			vkFreeMemory(device, stagingBufferMemory , nullptr);
 	}
 
+	// for debugging
+	void saveShadowImg(string filename) {
+		VkDeviceSize imageSize = WIDTH*HEIGHT * 4;
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+		region.imageOffset = { 0, 0, 0 };
+		region.imageExtent = {
+			WIDTH,
+			HEIGHT,
+			1
+		};
+
+		vkCmdCopyImageToBuffer(commandBuffer, depthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
+		endSingleTimeCommands(commandBuffer);
+
+		//void* mappedMemory;
+		//vkMapMemory(device, stagingBufferMemory, 0, WIDTH * HEIGHT * 4, 0, &mappedMemory);
+
+		//ofstream file(filename, std::ios::out | std::ios::binary | std::ios::trunc);
+		//if (!file.is_open()) {
+		//	std::cerr << "Failed to open file: " << filename << std::endl;
+		//	return;
+		//}
+
+		//// Write PPM header
+		//file << "P6\n" << WIDTH << " " << HEIGHT << "\n255\n";
+
+		//// Access and print buffer contents (assuming buffer contains uint32_t data)
+		//float* data = reinterpret_cast<float*>(mappedMemory);
+		////float f = 0;
+		//for (size_t i = 0; i < WIDTH * HEIGHT; ++i) {
+		//	unsigned char c = (clip(data[i], 0.f, 1.f) * 256);
+		//	//cout << " " << clip(data[i], 0.f, 1.f) * 256;
+
+		//	for (int s = 0; s < 3; s++) {
+		//		file << c;
+		//	}
+		//	//if (i % 4 != 0) file << data[i];
+		//}
+
+		//file.close();
+
+		// Unmap buffer memory
+		//vkUnmapMemory(device, stagingBufferMemory);
+
+		// Destroy the buffer
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+
+		// Free the memory
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
 
 
 	// swap chain recreation
@@ -2511,7 +2666,7 @@ private:
 				pixels[(i * 4)] = (int)(color.x*255.f);
 				pixels[(i * 4)+1] = (int)(color.y * 255.f);
 				pixels[(i * 4)+2] = (int)(color.z * 255.f);
-				pixels[(i * 4)+3] = 129;
+				pixels[(i * 4)+3] = 129; // TODO: remove hardcode.
 			}
 
 			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
@@ -2913,7 +3068,8 @@ private:
 	void createDepthResources() {
 		VkFormat depthFormat = findDepthFormat();
 
-		createImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
+		createImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
 		depthImageView = createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 	}
 
@@ -3064,19 +3220,42 @@ private:
 
 	void mainLoop() {
 		
-
+		int i = 0;
+		bool p = true;
 		while (!glfwWindowShouldClose(window)) {
 
 			executeKeyboardEvents();		
 			glfwPollEvents();
 			//render shadow map here for spot light
+			//int spotlight = 0;
 			//for (int light = 0; light < scene.lights.size(); light++) {
 			//	if (scene.lights[light]->getType() == 1) // if spotlight
 			//	{
-			//		generateShadowMap(light);
+			//		renderShadowMap(commandBuffers[0], light, spotlight);
+			//		spotlight++;
+
 			//	}
 			//}
-			drawFrame();
+			//cout << "DRAWING FRAME";
+			i++;
+			p = (i % 20 == 0);
+			drawFrame(p);
+			p = false;
+			//if (i == 0) {
+			//	int shadowFrame = 0;
+			//	for (int light = 0; light < scene.lights.size(); light++) {
+			//		if (scene.lights[light]->getType() == 1) // if spotlight
+			//		{
+			//			cout << "RENDERING SHADOW";
+			//			i = 1;
+			//			renderShadowMap(commandBuffers[0], light, 0, shadowFrame);
+			//			shadowFrame = (shadowFrame == 0) ? 1 : 0;
+			//			break;
+
+			//		}
+			//	}
+			//	i++;
+			//}
 
 		}
 		
@@ -3110,7 +3289,7 @@ private:
 				else if (action == "AVAI") {
 					glfwPollEvents();
 					currentFrameIndex = static_cast<uint32_t>(static_cast<int>(floor((frame / 1000000.f) * FPSi)) % totalFrames);
-					drawFrame();
+					drawFrame(true);
 				}
 				else if (action == "SAVE") {
 					p1 += 6;
@@ -3203,9 +3382,12 @@ private:
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 			vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
 			vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+			vkDestroySemaphore(device, shadowSemaphores[i], nullptr);
+			vkDestroySemaphore(device, shadowFinishedSemaphores[i], nullptr);
+
 			vkDestroyFence(device, inFlightFences[i], nullptr);
+			vkDestroyFence(device, shadowFences[i], nullptr);
 		}
-		vkDestroySemaphore(device, shadowSemaphore, nullptr);
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
 
