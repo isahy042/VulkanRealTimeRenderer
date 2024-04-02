@@ -65,6 +65,7 @@ public:
     map<int, int> nodeToObj;
 
     int totalFrames = 0;
+    int totalSpotLights = 0;
 
     Scene() {}
 
@@ -307,6 +308,7 @@ public:
                             }
                             lights.push_back(light);
                             s72map.push_back(make_pair(7, lights.size() - 1));
+                            totalSpotLights++;
                         }
                     }
 

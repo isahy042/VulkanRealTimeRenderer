@@ -179,6 +179,7 @@ private:
 	VkDevice device;
 
 	VkQueue graphicsQueue;
+	VkQueue shadowQueue;
 	VkQueue presentQueue;
 	
 	VkSwapchainKHR swapChain;
@@ -210,6 +211,7 @@ private:
 
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
+	VkSemaphore shadowSemaphore;
 	std::vector<VkFence> inFlightFences;
 	uint32_t currentFrame = 0;
 
@@ -237,6 +239,17 @@ private:
 	vector < vector<vector<VkDeviceMemory>>> spotlightBuffersMemory;
 	vector < vector<vector<void*>>> spotlightBuffersMapped;
 
+	// shadows
+	VkRenderPass shadowRenderPass;
+	vector<VkPipelineLayout> shadowPipelineLayout;
+	vector<VkPipeline> shadowGraphicsPipeline;
+	vector<VkFramebuffer> shadowSwapChainFramebuffers; 
+
+	vector<VkImage> shadowImage;
+	vector<VkImageView> shadowImageView;
+	vector<VkDeviceMemory> shadowImageMemory;
+
+	// descriptor set
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
 	vector<VkDescriptorSet> descriptorSets;
@@ -1202,7 +1215,291 @@ private:
 		}
 
 	}
+	
+	void generateShadowMap(int lightLocation, int lightIndex) {
+		// a lot of the code for shadow map are from 
+		// https://blogs.igalia.com/itoral/2017/07/30/working-with-lights-and-shadows-part-ii-the-shadow-map/
 
+		shared_ptr<Light> currLight = scene.lights[lightLocation];
+
+		// create depth image
+		VkImageCreateInfo shadowImageInfo = {};
+		shadowImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		shadowImageInfo.pNext = NULL;
+		shadowImageInfo.imageType = VK_IMAGE_TYPE_2D;
+		shadowImageInfo.format = VK_FORMAT_D32_SFLOAT;
+		shadowImageInfo.extent.width = currLight->getShadow();
+		shadowImageInfo.extent.height = currLight->getShadow();
+		shadowImageInfo.extent.depth = 1;
+		shadowImageInfo.mipLevels = 1;
+		shadowImageInfo.arrayLayers = 1;
+		shadowImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		shadowImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		shadowImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		// | VK_IMAGE_USAGE_SAMPLED_BIT; // not necessary for what im trying to do
+		shadowImageInfo.queueFamilyIndexCount = 0;
+		shadowImageInfo.pQueueFamilyIndices = NULL;
+		shadowImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		shadowImageInfo.flags = 0;
+
+		vkCreateImage(device, &shadowImageInfo, NULL, &shadowImage[lightIndex]);
+
+
+		VkMemoryRequirements memRequirements;
+		vkGetImageMemoryRequirements(device, shadowImage[lightIndex], &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); // TODO: check this property
+
+		if (vkAllocateMemory(device, &allocInfo, nullptr, &shadowImageMemory[lightIndex]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate image memory!");
+		}
+
+		vkBindImageMemory(device, shadowImage[lightIndex], shadowImageMemory[lightIndex], 0);
+
+		// create image view
+		VkImageViewCreateInfo shadowImageViewInfo = {};
+		shadowImageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		shadowImageViewInfo.pNext = NULL;
+		shadowImageViewInfo.image = shadowImage[lightIndex];
+		shadowImageViewInfo.format = VK_FORMAT_D32_SFLOAT; // float format
+		shadowImageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R; // TODO: safe to remove?
+		shadowImageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+		shadowImageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+		shadowImageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+		shadowImageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		shadowImageViewInfo.subresourceRange.baseMipLevel = 0;
+		shadowImageViewInfo.subresourceRange.levelCount = 1;
+		shadowImageViewInfo.subresourceRange.baseArrayLayer = 0;
+		shadowImageViewInfo.subresourceRange.layerCount = 1;
+		shadowImageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		shadowImageViewInfo.flags = 0;
+
+		vkCreateImageView(device, &shadowImageViewInfo, NULL, &shadowImageView[lightIndex]);
+
+	}
+
+	void createShadowMapRenderPass()
+	{
+		VkAttachmentDescription attachments[2];
+
+		// Depth attachment (shadow map)
+		attachments[0].format = VK_FORMAT_D32_SFLOAT;
+		attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		attachments[0].flags = 0;
+
+		// Attachment references from subpasses
+		VkAttachmentReference depthRef;
+		depthRef.attachment = 0;
+		depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+		// Subpass 0: shadow map rendering
+		VkSubpassDescription subpass[1];
+		subpass[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass[0].flags = 0;
+		subpass[0].inputAttachmentCount = 0;
+		subpass[0].pInputAttachments = NULL;
+		subpass[0].colorAttachmentCount = 0;
+		subpass[0].pColorAttachments = NULL;
+		subpass[0].pResolveAttachments = NULL;
+		subpass[0].pDepthStencilAttachment = &depthRef;
+		subpass[0].preserveAttachmentCount = 0;
+		subpass[0].pPreserveAttachments = NULL;
+
+		// Create render pass
+		VkRenderPassCreateInfo renderPassInfo;
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.pNext = NULL;
+		renderPassInfo.attachmentCount = 1;
+		renderPassInfo.pAttachments = attachments;
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = subpass;
+		renderPassInfo.dependencyCount = 0;
+		renderPassInfo.pDependencies = NULL;
+		renderPassInfo.flags = 0;
+
+		vkCreateRenderPass(device, &renderPassInfo, NULL, &shadowRenderPass);
+	}
+	
+	void createShadowFrameBuffer(int lightLocation, int lightIndex)
+	{
+		int shadowSize = scene.lights[lightLocation]->getShadow();
+		VkFramebufferCreateInfo fb_info;
+		fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		fb_info.pNext = NULL;
+		fb_info.renderPass = shadowRenderPass;
+		fb_info.attachmentCount = 1;
+		fb_info.pAttachments = &shadowImageView[lightIndex];
+		fb_info.width = shadowSize;
+		fb_info.height = shadowSize;
+		fb_info.layers = 1;
+		fb_info.flags = 0;
+		vkCreateFramebuffer(device, &fb_info, NULL, &shadowSwapChainFramebuffers[lightIndex]);
+
+	}
+
+	void createShadowPipeline(int lightIndex)
+	{
+		auto vertShaderCode = readFile("shaders/shadow.spv");
+
+		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+
+		VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		vertShaderStageInfo.module = vertShaderModule;
+		vertShaderStageInfo.pName = "main";
+
+		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo};
+
+		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+		auto bindingDescription = Vertex::getBindingDescription();
+		auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+		VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+		// multisampling
+		VkPipelineMultisampleStateCreateInfo multisampling{};
+		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampling.sampleShadingEnable = VK_FALSE;
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+
+		if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &shadowPipelineLayout[lightIndex]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create pipeline layout!");
+		}
+
+		VkGraphicsPipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = 1;
+		pipelineInfo.pStages = shaderStages;
+		pipelineInfo.pVertexInputState = &vertexInputInfo;
+		pipelineInfo.pInputAssemblyState = &inputAssembly; // may remove
+		//pipelineInfo.pViewportState = &viewportState;
+		//pipelineInfo.pRasterizationState = &rasterizer;
+		pipelineInfo.pMultisampleState = &multisampling;
+		//pipelineInfo.pDepthStencilState = &depthStencil;
+		//pipelineInfo.pColorBlendState = &colorBlending;
+		//pipelineInfo.pDynamicState = &dynamicState;
+		pipelineInfo.layout = shadowPipelineLayout[lightIndex];
+		pipelineInfo.renderPass = shadowRenderPass;
+		//pipelineInfo.subpass = 0;
+		//pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		//pipelineInfo.basePipelineIndex = -1; // Optional
+		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &shadowGraphicsPipeline[lightIndex]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create graphics pipeline!");
+		}
+
+		vkDestroyShaderModule(device, vertShaderModule, nullptr);
+	}
+
+	void renderShadowMap(VkCommandBuffer commandBuffer, int lightIndex, int imageIndex)
+	{
+
+		int shadowSize = scene.lights[lightIndex]->getShadow();
+
+		std::array<VkClearValue, 2> clearValues{};
+		clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+
+		// alternatively
+		//// what
+		//VkClearValue clear_values[1];
+		//clear_values[0].depthStencil.depth = 1.0f;
+		//clear_values[0].depthStencil.stencil = 0;
+
+		// may need these
+		//VkCommandBufferBeginInfo beginInfo{};
+		//beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		//if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+		//	throw std::runtime_error("failed to begin recording command buffer!");
+		//}
+
+		VkRenderPassBeginInfo renderPassInfo{};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = shadowRenderPass;
+		renderPassInfo.framebuffer = shadowSwapChainFramebuffers[imageIndex];
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent.width = shadowSize;
+		renderPassInfo.renderArea.extent.height = shadowSize;
+		//renderPassInfo.clearValueCount = 1;
+		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		renderPassInfo.pClearValues = clearValues.data();
+
+		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		for (int mat = 0; mat < totalMaterials; mat++) {
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline[mat]);
+
+			VkViewport viewport;
+			viewport.height = shadowSize;
+			viewport.width = shadowSize;
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 1.0f;
+			viewport.x = 0;
+			viewport.y = 0;
+			vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+			VkRect2D scissor;
+			scissor.extent.width = shadowSize;
+			scissor.extent.height = shadowSize;
+			scissor.offset.x = 0;
+			scissor.offset.y = 0;
+			vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+			for (int obj : scene.materials[mat]->getObjList()) {
+				if (!scene.objects[obj].inFrame && isCulling) continue;
+				VkBuffer vertexBuffers[] = { vertexBuffer[obj] };
+				VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(commandBuffer, indexBuffer[obj], 0, VK_INDEX_TYPE_UINT32);
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout[mat], 0, 1, &descriptorSets[(currentFrame * totalObjects) + obj], 0, nullptr);
+				vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices[obj].size()), 1, 0, 0, 0);
+			}
+		}
+		vkCmdEndRenderPass(commandBuffer);
+
+		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+			throw std::runtime_error("failed to record command buffer!");
+		}
+
+		VkPipelineStageFlags shadow_map_wait_stages = 0;
+		VkSubmitInfo submit_info = { };
+		submit_info.pNext = NULL;
+		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submit_info.waitSemaphoreCount = 0;
+		submit_info.pWaitSemaphores = NULL;
+		submit_info.signalSemaphoreCount = 1;
+		submit_info.pSignalSemaphores = &shadowSemaphore;
+		submit_info.pWaitDstStageMask = 0;
+		submit_info.commandBufferCount = 1;
+		submit_info.pCommandBuffers = &commandBuffer;
+
+		vkQueueSubmit(shadowQueue, 1, &submit_info, NULL);
+
+	}
 	void drawFrame() {
 
 		// wait for prev frame
@@ -1226,7 +1523,6 @@ private:
 		// this should ideally only be called if there has been a change to the scene.
 		// TODO: add very simple optimization
 		scene.updateSceneTransformMatrix(currentFrameIndex);
-		//update shadow map
 		scene.cull();
 		for (int obj = 0; obj < totalObjects; obj++) {
 			if (isCulling && !scene.objects[obj].inFrame) continue;
@@ -1389,6 +1685,22 @@ private:
 		}
 
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
+	}
+
+	void cleanupShadowSwapChain() {
+		//vkDestroyImageView(device, depthImageView, nullptr);
+		//vkDestroyImage(device, depthImage, nullptr);
+		//vkFreeMemory(device, depthImageMemory, nullptr);
+
+		for (auto framebuffer : shadowSwapChainFramebuffers) {
+			vkDestroyFramebuffer(device, framebuffer, nullptr);
+		}
+
+		//for (auto imageView : swapChainImageViews) {
+		//	vkDestroyImageView(device, imageView, nullptr);
+		//}
+
+		//vkDestroySwapchainKHR(device, swapChain, nullptr);
 	}
 
 	// vertex buffer
@@ -2178,7 +2490,6 @@ private:
 	}
 
 	void createCubeMapTexture(string filename, int matIndex, int category, bool mipmap = false) {
-
 		int texWidth, texHeight, texChannels;
 		VkDeviceSize imageSize, layerSize;
 		VkBuffer stagingBuffer;
@@ -2719,14 +3030,34 @@ private:
 			createLightBuffers(obj);
 		}
 
-		cout << "\nCreating descriptor sets.";
 
 		createDescriptorSets();
-
-		cout << "\nAlmost done..";
-
 		createCommandBuffer();
 		createSyncObjects();
+
+		// shadows 
+		cout << "\nInitializing shadow map";
+		shadowImage.resize(scene.totalSpotLights);
+		shadowImageView.resize(scene.totalSpotLights);
+		shadowImageMemory.resize(scene.totalSpotLights);
+		shadowSwapChainFramebuffers.resize(scene.totalSpotLights);
+		shadowGraphicsPipeline.resize(scene.totalSpotLights);
+		shadowPipelineLayout.resize(scene.totalSpotLights);
+
+		createShadowMapRenderPass();
+
+		int spotLightIndex = 0; // starts from 0
+		for (int light = 0; light < scene.lights.size(); light++) {
+			if (scene.lights[light]->getType() == 1) // if spotlight
+			{
+				generateShadowMap(light, spotLightIndex);
+				createShadowFrameBuffer(light, spotLightIndex);
+				createShadowPipeline(spotLightIndex);
+				spotLightIndex++;
+			}
+		}
+		
+
 
 		cout << "\nVulkan Successfully Initialized.";
 	}
@@ -2738,6 +3069,13 @@ private:
 
 			executeKeyboardEvents();		
 			glfwPollEvents();
+			//render shadow map here for spot light
+			//for (int light = 0; light < scene.lights.size(); light++) {
+			//	if (scene.lights[light]->getType() == 1) // if spotlight
+			//	{
+			//		generateShadowMap(light);
+			//	}
+			//}
 			drawFrame();
 
 		}
@@ -2808,6 +3146,7 @@ private:
 
 	void cleanup() {
 		cleanupSwapChain();
+		cleanupShadowSwapChain();
 
 		for (size_t i = 0; i < totalMaterials; i++) {
 			for (size_t j = 0; j < TEXTURE_COUNT; j++) {
@@ -2817,6 +3156,16 @@ private:
 				vkDestroyImage(device, textureImage[i][j], nullptr);
 				vkFreeMemory(device, textureImageMemory[i][j], nullptr);
 			}
+		}
+
+		int shadowNumber = scene.totalSpotLights;
+		for (size_t j = 0; j < shadowNumber; j++) {
+			vkDestroyImage(device, shadowImage[j], nullptr);
+			vkDestroyImageView(device, shadowImageView[j], nullptr);
+			//vkDestroyImage(device, textureImage[i][j], nullptr);
+			vkFreeMemory(device, shadowImageMemory[j], nullptr);
+			vkDestroyPipeline(device, shadowGraphicsPipeline[j], nullptr);
+			vkDestroyPipelineLayout(device, shadowPipelineLayout[j], nullptr);
 		}
 		
 		for (size_t obj = 0; obj < totalObjects; obj++) {
@@ -2856,6 +3205,7 @@ private:
 			vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
 			vkDestroyFence(device, inFlightFences[i], nullptr);
 		}
+		vkDestroySemaphore(device, shadowSemaphore, nullptr);
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
 
@@ -2864,6 +3214,7 @@ private:
 			vkDestroyPipelineLayout(device, pipelineLayout[i], nullptr);
 		}
 		vkDestroyRenderPass(device, renderPass, nullptr);
+		vkDestroyRenderPass(device, shadowRenderPass, nullptr);
 
 		vkDestroyDevice(device, nullptr);
 		glfwDestroyWindow(window);

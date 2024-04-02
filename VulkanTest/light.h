@@ -20,6 +20,7 @@ public:
     virtual Vec44f getTransformationMatrix() { return Vec44f(Vec4f(0.f)); };
     virtual Vec44f getDataMatrix() { return Vec44f(Vec4f(0.f)); };
     virtual int getType() { return -1; };
+    virtual int getShadow() { return -1; };
 };
 
 class Sun : public Light {
@@ -35,7 +36,7 @@ public:
     float angle;
     float strength;
 
-    int shadow = 0;
+    int shadow = 256;
 
     void setValue(string n, string val) override
     {
@@ -75,6 +76,7 @@ public:
             Vec4f(0.f));
     }
     int getType() override { return type; };
+    int getShadow() override { return shadow; };
 
 };
 
@@ -87,7 +89,7 @@ public:
 
 
     int type = 0;
-    int shadow = 0;
+    int shadow = 256;
 
     float radius;
     float power;
@@ -135,6 +137,8 @@ public:
             Vec4f(0.f));
     }
     int getType() override { return type; };
+    int getShadow() override { return shadow; };
+
 
 };
 
@@ -148,7 +152,7 @@ public:
 
 
     int type = 1;
-    int shadow = 0;
+    int shadow = 256;
 
     float radius;
     float power;
@@ -206,5 +210,7 @@ public:
             Vec4f(direction.x, direction.y, direction.z, 0.0f));
     }
     int getType() override { return type; };
+    int getShadow() override { return shadow; };
+
 
 };
