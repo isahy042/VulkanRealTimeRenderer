@@ -25,6 +25,8 @@ layout(location = 5) out vec3 bitang;
 
 void main() {
     gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    //gl_Position = light.proj * light.view * ubo.model * vec4(inPosition, 1.0);
+
     surfaceNormal = mat3(transpose(inverse(ubo.model))) * inNormal;
     
     position = vec3(ubo.model * vec4(inPosition, 1.0));
