@@ -214,9 +214,9 @@ public:
             float scaleVfov = 1 / std::tan(fov / 2.0f);
             projMat[0][0] = scaleVfov;
             projMat[1][1] = scaleVfov;
-            projMat[2][2] = -(100) / ((100) - 0.01);
+            projMat[2][2] = -(100) / ((100) - 0.1);
             projMat[2][3] = -1.0f;
-            projMat[3][2] = -((100) * 0.01) / ((100) - 0.01);
+            projMat[3][2] = -((100) * 0.1) / ((100) - 0.1);
         }
         else if (n == "blend")
         {

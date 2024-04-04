@@ -29,10 +29,10 @@ layout(location = 4) out float lightMaxReach;
 void main() {
     // for spot light only 
 
-   // gl_Position = light.proj * lightView * ubo.model * vec4(inPosition, 1.0);
     gl_Position = light.proj * light.view * ubo.model * vec4(inPosition, 1.0);
 
-    position = vec3(ubo.model * vec4(inPosition, 1.0));
+    vec4 t = ubo.model * vec4(inPosition, 1.0);
+    position = t.xyz/t.w;
     normal = normalize(mat3(transpose(inverse(ubo.model))) * inNormal);
 
     lightPosition = vec3(light.model * vec4(0,0,0,1));

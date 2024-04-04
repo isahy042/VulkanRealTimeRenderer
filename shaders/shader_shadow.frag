@@ -23,6 +23,7 @@ layout(location = 4) in float lightMaxReach;
 layout(location = 0) out vec3 outColor;
 
 void main() {
+    
     float d = length(position-lightPosition);
     if (d<lightMaxReach){
         outColor = vec3(d/lightMaxReach);

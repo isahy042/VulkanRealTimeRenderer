@@ -18,21 +18,27 @@ layout (binding = 7) uniform sampler2D texSampler;
 layout(binding = 8) uniform LightObject1 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } sphereLight[10];
 
 layout(binding = 9) uniform LightObject2 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } spotLight[10];
 
 layout(binding = 10) uniform LightObject3 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } sunLight[5];
 
-layout (binding = 11) uniform sampler2DShadow sphereShadow[10];
-layout (binding = 12) uniform sampler2DShadow spotShadow[10];
-layout (binding = 13) uniform sampler2DShadow sunShadow[5];
+layout (binding = 11) uniform sampler2D sphereShadow[10];
+layout (binding = 12) uniform sampler2D spotShadow[10];
+layout (binding = 13) uniform sampler2D sunShadow[5];
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -69,7 +75,6 @@ vec4 gammaEncode(vec4 color) {
 
 vec3 rgbe2rgb(vec4 rgbe) {
     // Extract exponent
-    
     if (rgbe.x + rgbe.y + rgbe.z + rgbe.w == 0) return vec3(0.0);
 
     rgbe = rgbe * 255;
@@ -133,12 +138,11 @@ vec3 getSphereLight(vec3 normal){
     return color;
 }
 
-vec3 getSpotLight(vec3 normal){
+vec3 getSpotLight(vec3 reflected, vec3 realNormal){
     vec3 color = vec3(0.);
     mat4 light;
     // iterate through lights, break out early if possible
     for (int i = 0; i < 10; i++){
-        
         light = spotLight[i].data;
         if (light[0][0]<1) {
             break;
@@ -167,15 +171,24 @@ vec3 getSpotLight(vec3 normal){
         vec3 pointOnSphere = lightPos - (normalize(l) * radius);
         // get fov with the closest point on the sphere
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
-        
+
+        vec4 lightSpaceLocation = spotLight[0].proj * spotLight[0].view * vec4(position, 1.0);
+        lightSpaceLocation /= lightSpaceLocation.w;
+        vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, 1 - lightSpaceLocation.y) / 2;
+        float depth = gammaEncode(texture(spotShadow[0], sampleDepthAt)).x; // this may need to be gamma encoded?
+
+        if (length(l)/limit > depth || dot(normalize(l), normalize( reflected))<0 || dot(normalize(l), normalize(realNormal))<0){
+             continue;
+        }
+
         // we will hit the object. assign color.
-        if (fov/2 >= currentFov && dot(normalize(l), normalize(normal))>0){
+        if (fov/2 >= currentFov){
             // update the cutoff adjustment factor identical to sphere light
-            float lengthOfN = dot(l, normalize(normal));
+            float lengthOfN = dot(l, normalize( reflected));
             float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
             bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
 
-            cutoff *= dot(normalize(l), normalize(normal));
+            cutoff *= dot(normalize(l), normalize( reflected));
 
             // if fully illuminated 
             if (fov * (1-blend)/2 >= currentFov){
@@ -220,7 +233,7 @@ vec3 getSunLight(vec3 normal){
 
 
 void main() {
-    vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
+ vec3 normalColor = (gammaEncode(texture(normalMap, surfaceNormal).xyz) - 0.5) * 2;
     vec3 newNormal = vec3(
         (normalColor.x * tang.x) + (normalColor.y * bitang.x) + (normalColor.z * surfaceNormal.x), 
         (normalColor.x * tang.y) + (normalColor.y * bitang.y) +(normalColor.z * surfaceNormal.y),
@@ -243,7 +256,7 @@ void main() {
     vec3 metal_brdf = prefilteredColor * c;
 
     vec3 dielectric_brdf = mixColor(albedo/3.14159, prefilteredColor,
-       1-((0.04 * EnvBRDF.x) + EnvBRDF.y));
+       1- ((0.04 * EnvBRDF.x) + EnvBRDF.y));
 
-    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(R) +getSpotLight(R)+getSunLight(R));
+    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(R) +getSpotLight(R, newNormal)+getSunLight(R));
 }

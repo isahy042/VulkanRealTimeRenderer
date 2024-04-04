@@ -37,7 +37,7 @@
 using namespace std;
 
 uint32_t WIDTH = 800;
-uint32_t HEIGHT = 600;
+uint32_t HEIGHT = 800;
 
 const int TEXTURE_COUNT = 7;
 const int MAX_LIGHT = 10;
@@ -215,7 +215,7 @@ private:
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
 	vector<VkSemaphore> shadowSemaphores;
-	vector<VkSemaphore> shadowFinishedSemaphores;
+	vector<VkSemaphore> shadowFinishedSemaphores; // TODO: THIS IS UNUSED
 	std::vector<VkFence> inFlightFences;
 	std::vector<VkFence> shadowFences;
 	VkFence shadowMapFinishedFence;
@@ -267,6 +267,12 @@ private:
 	vector<vector<VkBuffer>> shadowLightBuffers;
 	vector<vector<VkDeviceMemory>> shadowLightBuffersMemory;
 	vector<vector<void*>> shadowLightBuffersMapped;
+
+	// Shadow texture
+	vector<vector<VkImage>> shadowTextureImage;
+	vector<vector<VkDeviceMemory>> shadowTextureImageMemory;
+	vector<vector<VkImageView>> shadowTextureImageView;
+	vector<vector<VkSampler>> shadowTextureSampler;
 
 	// shadow descriptor set
 	VkDescriptorSetLayout shadowDescriptorSetLayout;
@@ -1718,8 +1724,6 @@ private:
 		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 			throw std::runtime_error("failed to record command buffer!");
 		}
-
-		//saveShadowImg("shadow.ppm");
 		// 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1729,12 +1733,9 @@ private:
 			throw std::runtime_error("failed to submit draw command buffer!");
 		}
 
-		vkWaitForFences(device, 1, &shadowFences[currentShadowFrame], VK_TRUE, UINT64_MAX);
+		//vkWaitForFences(device, 1, &shadowFences[currentShadowFrame], VK_TRUE, UINT64_MAX);
 
-		//saveShadowImg("shadow.ppm");
-
-		currentShadowFrame = (currentShadowFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-
+		saveShadowImg("shadow.ppm");
 
 	}
 
@@ -2466,13 +2467,13 @@ private:
 
 					VkDescriptorImageInfo sphereShadow{};
 					sphereShadow.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-					sphereShadow.imageView = textureImageView[materialIndex][3];
-					sphereShadow.sampler = textureSampler[materialIndex][3];
+					sphereShadow.imageView = shadowTextureImageView[i][j];
+					sphereShadow.sampler = shadowTextureSampler[i][j];
 
 					VkDescriptorImageInfo spotShadow{};
 					spotShadow.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-					spotShadow.imageView = textureImageView[materialIndex][3];
-					spotShadow.sampler = textureSampler[materialIndex][3];
+					spotShadow.imageView = shadowTextureImageView[i][j];
+					spotShadow.sampler = shadowTextureSampler[i][j];
 
 					bufferInfoSphere[j] = sphereBuffer;
 					bufferInfoSpot[j] = spotBuffer;
@@ -2489,8 +2490,8 @@ private:
 
 					VkDescriptorImageInfo sunShadow{};
 					sunShadow.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-					sunShadow.imageView = textureImageView[materialIndex][3];
-					sunShadow.sampler = textureSampler[materialIndex][3];
+					sunShadow.imageView = shadowTextureImageView[i][j];
+					sunShadow.sampler = shadowTextureSampler[i][j];
 
 					bufferInfoSun[j] = sunBuffer;
 					shadowInfoSun[j] = sunShadow;
@@ -3259,14 +3260,126 @@ private:
 		endSingleTimeCommands(commandBuffer);
 	}
 
+	// shadow texture
+	void createShadowTexture(int light) {
+		for (int frame = 0; frame < MAX_FRAMES_IN_FLIGHT; frame++) {
+			createShadowTextureImage(light, frame);
+			createShadowTextureImageView(light, frame);
+			createShadowTextureSampler(light, frame);
+		}
+	}
+
+	void createShadowTextureSampler(int light, int frame) {
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+		VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
+		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &shadowTextureSampler[frame][light]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create texture sampler!");
+		}
+	}
+
+	// texture 
+	void transferShadowTextureImage(int light, int frame) {
+		saveShadowImg("shadow.ppm");
+		VkDeviceSize imageSize = WIDTH * HEIGHT * 4;
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+		region.imageOffset = { 0, 0, 0 };
+		region.imageExtent = {
+			WIDTH,
+			HEIGHT,
+			1
+		};
+		vkCmdCopyImageToBuffer(commandBuffer, shadowSwapChainImages[currentShadowFrame], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
+		endSingleTimeCommands(commandBuffer);
+
+		// map memory
+		//void* data;
+		//vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+		//vkUnmapMemory(device, stagingBufferMemory);
+
+		/*createImage(WIDTH, HEIGHT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowTextureImage[frame][light], shadowTextureImageMemory[frame][light]);
+		transitionImageLayout(shadowTextureImage[frame][light], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);*/
+		copyBufferToImage(stagingBuffer, shadowTextureImage[frame][light], static_cast<uint32_t>(WIDTH), static_cast<uint32_t>(HEIGHT));
+		transitionImageLayout(shadowTextureImage[frame][light], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+	
+	// texture 
+	void createShadowTextureImage(int light, int frame) {
+		VkDeviceSize imageSize = WIDTH * HEIGHT * 4;
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+		region.imageOffset = { 0, 0, 0 };
+		region.imageExtent = {
+			WIDTH,
+			HEIGHT,
+			1
+		};
+		//cout << "\nsize!" << depthImage.size();
+		vkCmdCopyImageToBuffer(commandBuffer, shadowSwapChainImages[currentShadowFrame], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
+		endSingleTimeCommands(commandBuffer);
+
+		// map memory
+		void* data;
+		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+		vkUnmapMemory(device, stagingBufferMemory);
+
+		createImage(WIDTH, HEIGHT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowTextureImage[frame][light], shadowTextureImageMemory[frame][light]);
+		transitionImageLayout(shadowTextureImage[frame][light], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToImage(stagingBuffer, shadowTextureImage[frame][light], static_cast<uint32_t>(WIDTH), static_cast<uint32_t>(HEIGHT));
+		transitionImageLayout(shadowTextureImage[frame][light], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
+	void createShadowTextureImageView(int light, int frame)
+	{
+		shadowTextureImageView[frame][light] = createImageView(shadowTextureImage[frame][light], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+	}
+	
 	// image texture
 	void create2DTexture(string filename, int matIndex, int category) {
 		createTextureImage(filename, matIndex, category);
-
 		createTextureImageView(filename, matIndex, category);
-
 		createTextureSampler(matIndex, category);
-
 	}
 
 	void createTextureSampler(int matIndex, int category) {
@@ -3326,12 +3439,12 @@ private:
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
 	}
-	
+
 	void createTextureImageView(string filename, int matIndex, int category)
 	{
 		textureImageView[matIndex][category] = createImageView(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
-	
+
 	// depth
 	void createDepthResources() {
 		VkFormat depthFormat = findDepthFormat();
@@ -3440,6 +3553,22 @@ private:
 		}
 		createShadowPipeline(); // one pipeline for all renders.
 
+		// shadow texture
+		shadowTextureImage.resize(MAX_FRAMES_IN_FLIGHT);
+		shadowTextureImageMemory.resize(MAX_FRAMES_IN_FLIGHT);
+		shadowTextureImageView.resize(MAX_FRAMES_IN_FLIGHT);
+		shadowTextureSampler.resize(MAX_FRAMES_IN_FLIGHT);
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			shadowTextureImage[i].resize(MAX_LIGHT);
+			shadowTextureImageMemory[i].resize(MAX_LIGHT);
+			shadowTextureImageView[i].resize(MAX_LIGHT);
+			shadowTextureSampler[i].resize(MAX_LIGHT);
+		}
+
+		for (int i = 0; i < MAX_LIGHT; i++) {
+			createShadowTexture(i);
+		}
+
 		vertexBuffer.resize(totalObjects);
 		vertexBufferMemory.resize(totalObjects);
 		indexBuffer.resize(totalObjects);
@@ -3490,20 +3619,41 @@ private:
 	}
 
 	void mainLoop() {
-		
+
+		int lightIndex = 0;
+		for (int l = 0; l < scene.lights.size(); l++) {
+			if (scene.lights[l]->getType() == 1) { // spot light
+				drawShadowMap(shadowCommandBuffers[currentShadowFrame], l);
+				// copy into shadow texture buffer.
+				transferShadowTextureImage(lightIndex, 0);
+				transferShadowTextureImage(lightIndex, 1);
+				currentShadowFrame = (currentShadowFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+				lightIndex++;
+			}
+		}
+		uint32_t w = (currentShadowFrame == 1) ? 0 : 1;
+		vkWaitForFences(device, 1, &shadowFences[w], VK_TRUE, UINT64_MAX);
+
 		while (!glfwWindowShouldClose(window)) {
 			executeKeyboardEvents();		
 			glfwPollEvents();
 
-			for (int l = 0; l < scene.lights.size(); l++) {
-				if (scene.lights[l]->getType() == 1) { // spot light
-				drawShadowMap(shadowCommandBuffers[currentShadowFrame], l);
-				}
-			}
-			uint32_t w = (currentShadowFrame == 1) ? 0 : 1;
-			vkWaitForFences(device, 1, &shadowFences[w], VK_TRUE, UINT64_MAX);
-
+			//int lightIndex = 0;
+			//for (int l = 0; l < scene.lights.size(); l++) {
+			//	if (scene.lights[l]->getType() == 1) { // spot light
+			//		drawShadowMap(shadowCommandBuffers[currentShadowFrame], l);
+			//		// copy into shadow texture buffer.
+			//		transferShadowTextureImage(lightIndex, currentFrame);
+			//		currentShadowFrame = (currentShadowFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+			//		lightIndex++;
+			//	}
+			//}
+			//uint32_t w = (currentShadowFrame == 1) ? 0 : 1;
+			//vkWaitForFences(device, 1, &shadowFences[w], VK_TRUE, UINT64_MAX);
+			
+			
 			drawFrame();
+			//break;
 		}
 		vkDeviceWaitIdle(device);
 	}
@@ -3584,7 +3734,6 @@ private:
 		
 		for (size_t obj = 0; obj < totalObjects; obj++) {
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-
 				vkDestroyBuffer(device, uniformBuffers[obj][i], nullptr);
 				vkFreeMemory(device, uniformBuffersMemory[obj][i], nullptr);
 
@@ -3596,13 +3745,22 @@ private:
 					vkFreeMemory(device, spotlightBuffersMemory[obj][i][j], nullptr);
 					vkDestroyBuffer(device, spherelightBuffers[obj][i][j], nullptr);
 					vkFreeMemory(device, spherelightBuffersMemory[obj][i][j], nullptr);
+
 				}
 				for (size_t j = 0; j < MAX_SUN_LIGHT; j++) {
 					vkDestroyBuffer(device, sunlightBuffers[obj][i][j], nullptr);
 					vkFreeMemory(device, sunlightBuffersMemory[obj][i][j], nullptr);
 				}
 
-				
+			}
+		}
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			for (size_t j = 0; j < MAX_LIGHT; j++) {
+				vkDestroySampler(device, shadowTextureSampler[i][j], nullptr);
+				vkDestroyImageView(device, shadowTextureImageView[i][j], nullptr);
+				vkDestroyImage(device, shadowTextureImage[i][j], nullptr);
+				vkFreeMemory(device, shadowTextureImageMemory[i][j], nullptr);
 			}
 		}
 
@@ -3629,7 +3787,6 @@ private:
 			vkDestroyFence(device, inFlightFences[i], nullptr);
 			vkDestroyFence(device, shadowFences[i], nullptr);
 		}
-		
 		vkDestroyFence(device, shadowMapFinishedFence, nullptr);
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
