@@ -19,21 +19,27 @@ layout (binding = 7) uniform sampler2D texSampler;
 layout(binding = 8) uniform LightObject1 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } sphereLight[10];
 
 layout(binding = 9) uniform LightObject2 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } spotLight[10];
 
 layout(binding = 10) uniform LightObject3 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } sunLight[5];
 
-layout (binding = 11) uniform sampler2DShadow sphereShadow[10];
-layout (binding = 12) uniform sampler2DShadow spotShadow[10];
-layout (binding = 13) uniform sampler2DShadow sunShadow[5];
+layout (binding = 11) uniform sampler2D sphereShadow[10];
+layout (binding = 12) uniform sampler2D spotShadow[10];
+layout (binding = 13) uniform sampler2D sunShadow[5];
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -70,6 +76,10 @@ float gammaEncode(float value) {
 
 vec3 gammaEncode(vec3 color) {
     return vec3(gammaEncode(color.r), gammaEncode(color.g), gammaEncode(color.b));
+}
+
+vec4 gammaEncode(vec4 color) {
+    return vec4(gammaEncode(color.x), gammaEncode(color.y), gammaEncode(color.z), gammaEncode(color.w));
 }
 
 vec3 getSphereLight(vec3 normal){
@@ -154,8 +164,17 @@ vec3 getSpotLight(vec3 normal){
         // get fov with the closest point on the sphere
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
         
+        vec4 lightSpaceLocation = spotLight[i].proj * spotLight[i].view * vec4(position, 1.0);
+        lightSpaceLocation /= lightSpaceLocation.w;
+        vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, 1 - lightSpaceLocation.y) / 2;
+        float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x;
+
+        if (length(l)/limit > depth || dot(normalize(l), normalize(normal))<0){
+             continue;
+        }
+
         // we will hit the object. assign color.
-        if (fov/2 >= currentFov && dot(normalize(l), normalize(normal))>0){
+        if (fov/2 >= currentFov){
             // update the cutoff adjustment factor identical to sphere light
             float lengthOfN = dot(l, normalize(normal));
             float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));

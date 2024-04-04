@@ -753,7 +753,7 @@ void makePBRLUT() {
 			float A = 0;
 			float B = 0;
 
-			for (int s = 0; s < 5000; s++) {
+			for (int s = 0; s < 1000; s++) {
 
 				Vec2f Xi = Vec2f(randf(), randf());
 				Vec3f H = normalize(ImportanceSampleGGX(Xi, roughness, normal));
@@ -784,7 +784,7 @@ void makePBRLUT() {
 
 
 			}
-			Vec2f finalSamples = Vec2f(A, B) / 5000;
+			Vec2f finalSamples = Vec2f(A, B) / 1000;
 			outImg[h][w] = Vec4f(finalSamples.x, finalSamples.y, 0.f, 0.f);
 			
 		}
@@ -796,13 +796,51 @@ void makePBRLUT() {
 	int p = 0;
 	for (int h = 0; h < outWidth; h++) {
 		for (int w = 0; w < outWidth; w++) {
-			outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
-			outImgArr[(p * 4) + 1] = clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
-			outImgArr[(p * 4) + 2] = 0;
-			outImgArr[(p * 4) + 3] = 255;
+			if (w != 0 && w != outWidth - 1 && h != 0 && h != outWidth - 1) {
+				Vec4f t = (outImg[h - 1][w - 1] + outImg[h - 1][w] + outImg[h - 1][w + 1]
+					+ outImg[h][w - 1] + outImg[h][w] + outImg[h][w + 1] +
+					outImg[h + 1][w - 1] + outImg[h + 1][w] + outImg[h + 1][w + 1]) / 9.f;
+
+				outImgArr[(p * 4)] = clip((int)floor((t.x * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 1] = clip((int)floor((t.y * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 2] = 0;
+				outImgArr[(p * 4) + 3] = 255;
+			}
+			else {
+				outImgArr[(p * 4)] = clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 1] = clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
+				outImgArr[(p * 4) + 2] = 0;
+				outImgArr[(p * 4) + 3] = 255;
+			}
+			
 			p++;
 		}
 	}
+	//stbi_uc outImgArr[outWidth * outWidth * 4]; // allocate this for now, may not use whole array
+	//int p = 0;
+	//for (int h = 0; h < outWidth; h++) {
+	//	for (int w = 0; w < outWidth; w++) {
+	//		// if not edge, blur.
+	//		if (w != 0 && w != outWidth - 1 && h % outWidth != 0 && (h + 1) % outWidth != 0) {
+
+	//			Vec4f t = (outImg[h - 1][w - 1] + outImg[h - 1][w] + outImg[h - 1][w + 1]
+	//				+ outImg[h][w - 1] + outImg[h][w] + outImg[h][w + 1] +
+	//				outImg[h + 1][w - 1] + outImg[h + 1][w] + outImg[h + 1][w + 1]) / 9.f;
+
+	//			outImgArr[(p * 4)] = 1;//clip((int)floor(t.x * 255.f), 0, 255);
+	//			outImgArr[(p * 4) + 1] = 233;//clip((int)floor(t.y * 255.f), 0, 255);
+	//			outImgArr[(p * 4) + 2] = 233;// clip((int)floor(t.z * 255.f), 0, 255);
+	//			outImgArr[(p * 4) + 3] = 233;// clip((int)floor(t.w * 255.f), 0, 255);
+	//		}
+	//		else {
+	//			outImgArr[(p * 4)] = 1;//clip((int)floor((outImg[h][w].x * 255.f)), 0, 255);
+	//			outImgArr[(p * 4) + 1] = 233;// clip((int)floor((outImg[h][w].y * 255.f)), 0, 255);
+	//			outImgArr[(p * 4) + 2] = 233;//clip((int)floor((outImg[h][w].z * 255.f)), 0, 255);
+	//			outImgArr[(p * 4) + 3] = 233;//clip((int)floor((outImg[h][w].w * 255.f)), 0, 255);
+	//		}
+	//		p++;
+	//	}
+	//}
 
 	string on = "s72-main/examples/texture/" + outFilename;
 	const char* onc = on.c_str();

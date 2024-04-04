@@ -52,7 +52,6 @@ layout(location = 0) out vec3 outColor;
 
 // Apply Reinhard tone mapping operator
 vec3 toneMapReinhard(vec3 linearRGB) {
-    return linearRGB;
     float exposure = 2.0;
     return linearRGB / (linearRGB + vec3(1)) * exposure;
 }
@@ -95,7 +94,7 @@ vec3 mixColor(vec3 c1, vec3 c2, float p){
 }
 
 
-vec3 getSphereLight(vec3 normal){
+vec3 getSphereLight(vec3 normal, float alpha){
 
     vec3 color = vec3(0.);
     mat4 light;
@@ -129,16 +128,16 @@ vec3 getSphereLight(vec3 normal){
         float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
         bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
         if (intersect){
-            color += tint*(power/(4*3.1415*d*d))*cutoff *dot(normalize(l), normalize(normal)); //?
+            color += tint*(power/(4*3.1415*d*d))*cutoff *dot(normalize(l), normalize(normal))* (1/(3.1415926 * alpha * alpha));
         }
         else if (lengthOfN >= 0.0){
-            color += tint*(power/(4*3.1415*d*d))*cutoff*dot(normalize(l), normalize(normal));
+            color += tint*(power/(4*3.1415*d*d))*cutoff*dot(normalize(l), normalize(normal))* (1/(3.1415926 * alpha * alpha));
         }
     }
     return color;
 }
 
-vec3 getSpotLight(vec3 reflected, vec3 realNormal){
+vec3 getSpotLight(vec3 reflected, vec3 realNormal, float alpha){
     vec3 color = vec3(0.);
     mat4 light;
     // iterate through lights, break out early if possible
@@ -172,12 +171,12 @@ vec3 getSpotLight(vec3 reflected, vec3 realNormal){
         // get fov with the closest point on the sphere
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
 
-        vec4 lightSpaceLocation = spotLight[0].proj * spotLight[0].view * vec4(position, 1.0);
+        vec4 lightSpaceLocation = spotLight[i].proj * spotLight[i].view * vec4(position, 1.0);
         lightSpaceLocation /= lightSpaceLocation.w;
         vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, 1 - lightSpaceLocation.y) / 2;
-        float depth = gammaEncode(texture(spotShadow[0], sampleDepthAt)).x; // this may need to be gamma encoded?
+        float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x; // this may need to be gamma encoded?
 
-        if (length(l)/limit > depth || dot(normalize(l), normalize( reflected))<0 || dot(normalize(l), normalize(realNormal))<0){
+        if (length(l)/limit > depth || dot(normalize(l), normalize(reflected))<0 || dot(normalize(l), normalize(realNormal))<0){
              continue;
         }
 
@@ -188,7 +187,7 @@ vec3 getSpotLight(vec3 reflected, vec3 realNormal){
             float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
             bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
 
-            cutoff *= dot(normalize(l), normalize( reflected));
+            cutoff *= dot(normalize(l), normalize(reflected)) * (1/(3.1415926 * alpha * alpha));
 
             // if fully illuminated 
             if (fov * (1-blend)/2 >= currentFov){
@@ -245,12 +244,12 @@ void main() {
 
     vec3 I = position - cameraPosition;
 
-    float NoV = clamp(dot(normalize(newNormal), normalize(-I)), 0, 1.0); //cosine theta
+    float NoV = clamp(dot(normalize(newNormal), normalize(-I)), 0.01, 0.99); //cosine theta
     vec3 R = reflect(normalize(I), normalize(newNormal));
 
     vec3 prefilteredColor = rgbe2rgb(textureLod(mipmapTexture, R, roughness/0.2));
 
-    vec2 EnvBRDF = gammaEncode(texture(texSampler, vec2(roughness,  NoV)).xyz).xy;
+    vec2 EnvBRDF = texture(texSampler, vec2(roughness,  NoV)).xy;// gammaEncode(texture(texSampler, vec2(0,  NoV)).xyz).xy;
     vec3 c = (vec3(1) * EnvBRDF.x) + EnvBRDF.y;
 
     vec3 metal_brdf = prefilteredColor * c;
@@ -258,5 +257,5 @@ void main() {
     vec3 dielectric_brdf = mixColor(albedo/3.14159, prefilteredColor,
        1- ((0.04 * EnvBRDF.x) + EnvBRDF.y));
 
-    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(R) +getSpotLight(R, newNormal)+getSunLight(R));
+    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(R, roughness*roughness) +getSpotLight(R, newNormal, roughness*roughness)+getSunLight(R));
 }
