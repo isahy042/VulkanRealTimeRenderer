@@ -176,18 +176,18 @@ vec3 getSpotLight(vec3 reflected, vec3 realNormal, float alpha){
         vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, 1 - lightSpaceLocation.y) / 2;
         float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x; // this may need to be gamma encoded?
 
-        if (length(l)/limit > depth || dot(normalize(l), normalize(reflected))<0 || dot(normalize(l), normalize(realNormal))<0){
-             continue;
+        if (length(l)/limit > depth + 0.1 || dot(normalize(-lightDirection), normalize(realNormal))<0 || dot(normalize(-lightDirection), normalize(reflected))<0){// || dot(normalize(l), normalize(reflected))<0 || dot(normalize(l), normalize(realNormal))<0
+            continue;
         }
 
         // we will hit the object. assign color.
         if (fov/2 >= currentFov){
             // update the cutoff adjustment factor identical to sphere light
-            float lengthOfN = dot(l, normalize( reflected));
-            float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
-            bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
+            // float lengthOfN = abs(dot(l, normalize( reflected)));
+            // float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
+            // bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
 
-            cutoff *= dot(normalize(l), normalize(reflected)) * (1/(3.1415926 * alpha * alpha));
+            cutoff *= (1/(3.1415926 * alpha * alpha)); // * abs(dot(normalize(l), normalize(reflected)))
 
             // if fully illuminated 
             if (fov * (1-blend)/2 >= currentFov){
@@ -249,7 +249,7 @@ void main() {
 
     vec3 prefilteredColor = rgbe2rgb(textureLod(mipmapTexture, R, roughness/0.2));
 
-    vec2 EnvBRDF = texture(texSampler, vec2(roughness,  NoV)).xy;// gammaEncode(texture(texSampler, vec2(0,  NoV)).xyz).xy;
+    vec2 EnvBRDF = texture(texSampler, vec2(roughness,  NoV)).xy;//*gammaEncode(texture(texSampler, vec2(0,  NoV)).xyz).xy;
     vec3 c = (vec3(1) * EnvBRDF.x) + EnvBRDF.y;
 
     vec3 metal_brdf = prefilteredColor * c;
