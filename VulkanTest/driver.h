@@ -23,7 +23,6 @@ public:
         else if (n == "channel")
         {
             val = val.substr(1, val.size() - 3);
-            
             if (val == "translation") channel = 0;
             else if (val == "rotation") channel = 1;
             else if (val == "scale") channel = 2;
@@ -143,6 +142,8 @@ private:
         float t = static_cast<float>(time) / FPSi;
         float weight2 = (t - times[interval]) / intervalSize;
         float weight1 = 1 - weight2;
+
+        cout << "\n" << ((weight1 * values3[interval]) + (weight2 * values3[interval + 1])).y;
         return (weight1 * values3[interval]) + (weight2 * values3[interval + 1]);
     }
 

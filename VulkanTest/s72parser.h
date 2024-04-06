@@ -59,10 +59,20 @@ public:
     vector<Driver> drivers;
     vector<Object> objects;
     vector<shared_ptr<Material>> materials;
-    vector<shared_ptr<Light>> lights;
+
+    struct lightInstance {
+        shared_ptr<Light> lightPtr;
+        Vec44f transMat;
+        Vec44f viewMat;
+    };
+
+    vector<lightInstance> lights;
+    vector<shared_ptr<Light>> storedLights;
+    vector<int> spotLightsShadow;
     shared_ptr<Environment> envMat;
     
     map<int, int> nodeToObj;
+    map<int, int> nodeToLight;
 
     int totalFrames = 0;
     int totalSpotLights = 0;
@@ -99,7 +109,7 @@ public:
                 {
                     string objName = line.substr(9, 5);
                     obji++;
-                    // cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
+                     cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {
@@ -272,8 +282,8 @@ public:
                             if (line[0] != '}') {
                                 light->setValue(getName(line), getValue(line)); // shadow
                             }
-                            lights.push_back(light);
-                            s72map.push_back(make_pair(7, lights.size() - 1));
+                            storedLights.push_back(light);
+                            s72map.push_back(make_pair(7, storedLights.size() - 1));
                         }
                         else if (type == "sphere") {
                             shared_ptr<Sphere> light = make_shared<Sphere>();
@@ -289,8 +299,8 @@ public:
                             if (line[0] != '}') {
                                 light->setValue(getName(line), getValue(line)); // shadow
                             }
-                            lights.push_back(light);
-                            s72map.push_back(make_pair(7, lights.size() - 1));
+                            storedLights.push_back(light);
+                            s72map.push_back(make_pair(7, storedLights.size() - 1));
                         }
                         else if (type == "spot") {
                             shared_ptr<Spot> light = make_shared<Spot>();
@@ -306,8 +316,8 @@ public:
                             if (line[0] != '}') {
                                 light->setValue(getName(line), getValue(line)); // shadow
                             }
-                            lights.push_back(light);
-                            s72map.push_back(make_pair(7, lights.size() - 1));
+                            storedLights.push_back(light);
+                            s72map.push_back(make_pair(7, storedLights.size() - 1));
                             totalSpotLights++;
                         }
                     }
@@ -379,7 +389,6 @@ public:
     int instantiateNode(int root, vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates){
         //cout << "Instantiating node " << root << "\n";
         Node n = nodes[s72map[root].second];
-
         // push transformations onto vectors
         scales.push_back(n.scale);
         trans.push_back(n.translate);
@@ -388,7 +397,9 @@ public:
         Vec44f transMatrix = generateTransformationMatrix(scales, trans, rotates);
         if (n.camera > 0) instantiateCamera(n.camera, transMatrix);
         if (n.mesh > 0) instantiateMesh(n.mesh, root, transMatrix);
-        if (n.light > 0) instantiateLight(n.light, transMatrix);
+
+        if (n.light > 0) instantiateLight(root, n.light, transMatrix);
+
         if (n.children.size() > 0) {
             for (int& child : n.children) {
                 instantiateNode(child, scales, trans, rotates);
@@ -437,13 +448,20 @@ public:
 
     }
 
-    int instantiateLight(int at, Vec44f tm) {
-        // check if light
+    int instantiateLight(int nodeAt, int at, Vec44f tm) {
+        // check if light    
         if (s72map[at].first != 7) {
             printf("wants to instantiate light, but given object %d instead. \n", s72map[at].first);
             return 0;
         }
-        lights[s72map[at].second]->setTransformationMatrix(tm);
+
+        lightInstance light = { storedLights[s72map[at].second], tm, transpose44(invert44(tm)) };
+        lights.push_back(light);
+        // map the current object to its node
+        nodeToLight[nodeAt] = lights.size() - 1;
+        if (light.lightPtr->getType() == 1) { // if spot light.
+            spotLightsShadow.push_back(light.lightPtr->getShadow());
+        }
 
         return 1;
 
@@ -487,7 +505,7 @@ public:
 
         Vec44f transMatrix = generateTransformationMatrix(scales, trans, rotates);
         if (n.camera > 0) updateCameraTransformMatrix(n.camera, transMatrix);
-        if (n.light > 0) updateLightTransformMatrix(n.light, transMatrix);
+        if (n.light > 0) updateLightTransformMatrix(root, n.light, transMatrix);
         if (n.mesh > 0) { 
             updateMeshTransformMatrix(root, time, transMatrix);
 
@@ -498,8 +516,6 @@ public:
             nodes[s72map[root].second].bbmax.x = max(nodes[s72map[root].second].bbmax.x, objects[nodeToObj[root]].bbmax.x);
             nodes[s72map[root].second].bbmax.y = max(nodes[s72map[root].second].bbmax.y, objects[nodeToObj[root]].bbmax.y);
             nodes[s72map[root].second].bbmax.z = max(nodes[s72map[root].second].bbmax.z, objects[nodeToObj[root]].bbmax.z);
-           
-        
         }
         if (n.children.size() > 0) {
             for (int& child : n.children) {
@@ -525,8 +541,10 @@ public:
         if (updateFrustum) cameras[s72map[at].second].applyTrasformation();
     }
 
-    void updateLightTransformMatrix(int at, Vec44f tm) {
-        lights[s72map[at].second]->setTransformationMatrix(tm);
+    void updateLightTransformMatrix(int nodeAt, int at, Vec44f tm) {
+        int lightIndex = nodeToLight[nodeAt];
+        lights[lightIndex].transMat = tm;
+        lights[lightIndex].viewMat = transpose44(invert44(tm));
     }
 
     void updateMeshTransformMatrix(int nodeAt, int time, Vec44f tm) {

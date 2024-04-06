@@ -18,17 +18,27 @@ layout (binding = 7) uniform sampler2D texSampler;
 layout(binding = 8) uniform LightObject1 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } sphereLight[10];
 
 layout(binding = 9) uniform LightObject2 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } spotLight[10];
 
 layout(binding = 10) uniform LightObject3 {
     mat4 model;
     mat4 data;
+    mat4 proj;
+    mat4 view;
 } sunLight[5];
+
+layout (binding = 11) uniform sampler2DShadow sphereShadow[10];
+layout (binding = 12) uniform sampler2DShadow spotShadow[10];
+layout (binding = 13) uniform sampler2DShadow sunShadow[5];
 
 
 layout(location = 0) in vec3 surfaceNormal;

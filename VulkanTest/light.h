@@ -19,7 +19,7 @@ public:
     virtual void setTransformationMatrix(Vec44f m) {};
     virtual Vec44f getTransformationMatrix() { return Vec44f(Vec4f(0.f)); };
     virtual Vec44f getProjMatrix() { return Vec44f(Vec4f(0.f)); };
-    virtual Vec44f getDataMatrix() { return Vec44f(Vec4f(0.f)); };
+    virtual Vec44f getDataMatrix(Vec3f dir) { return Vec44f(Vec4f(0.f)); };
     virtual Vec44f getViewMatrix() { return Vec44f(Vec4f(0.f)); };
     virtual int getType() { return -1; };
     virtual int getShadow() { return -1; };
@@ -80,10 +80,10 @@ public:
     Vec44f getViewMatrix() override {
         return viewMat;
     }
-    Vec44f getDataMatrix() override {
+    Vec44f getDataMatrix(Vec3f dir) override {
         return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z), 
             Vec4f(shadow, angle, strength, 0.f), 
-            Vec4f(direction.x, direction.y, direction.z,0.f),
+            Vec4f(dir.x, dir.y, dir.z,0.f),
             Vec4f(0.f));
     }
     int getType() override { return type; };
@@ -150,7 +150,7 @@ public:
     Vec44f getViewMatrix() override {
         return viewMat;
     }
-    Vec44f getDataMatrix() override {
+    Vec44f getDataMatrix(Vec3f dir) override {
         return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z),
             Vec4f(shadow, radius, power, limit),
             Vec4f(0.f),
@@ -239,11 +239,11 @@ public:
     Vec44f getViewMatrix() override {
         return viewMat;
     }
-    Vec44f getDataMatrix() override {
+    Vec44f getDataMatrix(Vec3f dir) override {
         return Vec44f(Vec4f(1.f, tint.x, tint.y, tint.z),
             Vec4f(shadow, radius, power, limit),
             Vec4f(fov, blend, 0.f,0.f),
-            Vec4f(direction.x, direction.y, direction.z, 0.0f));
+            Vec4f(dir.x, dir.y, dir.z, 0.0f));
     }
 
     int getType() override { return type; };

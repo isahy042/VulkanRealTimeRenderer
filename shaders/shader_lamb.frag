@@ -82,6 +82,7 @@ vec4 gammaEncode(vec4 color) {
     return vec4(gammaEncode(color.x), gammaEncode(color.y), gammaEncode(color.z), gammaEncode(color.w));
 }
 
+// https://scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/shading-multiple-lights.html was very helpful
 vec3 getSphereLight(vec3 normal){
 
     vec3 color = vec3(0.);
@@ -117,7 +118,7 @@ vec3 getSphereLight(vec3 normal){
         vec3 l = lightPos-position;
         float lengthOfN = dot(l, normalize(normal));
         float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
-        bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
+        bool intersect = ((lengthOfN >= 0.0) && (len <= radius) && dot(normalize(normal), normalize(l)) > 0);
 
         if (intersect){
             color += tint*(power/(4*3.1415*d*d))*cutoff;
@@ -166,12 +167,23 @@ vec3 getSpotLight(vec3 normal){
         
         vec4 lightSpaceLocation = spotLight[i].proj * spotLight[i].view * vec4(position, 1.0);
         lightSpaceLocation /= lightSpaceLocation.w;
-        vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, 1 - lightSpaceLocation.y) / 2;
-        float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x;
+        vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, lightSpaceLocation.y + 1) / 2;
 
-        if (length(l)/limit > depth || dot(normalize(l), normalize(normal))<0){
+        float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x;
+        // PCF
+        float neighborDepth = 4.0;
+        float shadowIncrec = 1/shadow;
+        float shadowOffset = 0.01;
+        float currentDepth = length(l)/limit;
+        if (currentDepth > depth + shadowOffset || dot(normalize(l), normalize(normal))<0){// 
              continue;
         }
+
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x + shadowIncrec, sampleDepthAt.y))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x - shadowIncrec, sampleDepthAt.y))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x, sampleDepthAt.y + shadowIncrec))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x, sampleDepthAt.y - shadowIncrec))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        cutoff *= neighborDepth/4.0;
 
         // we will hit the object. assign color.
         if (fov/2 >= currentFov){
@@ -184,6 +196,7 @@ vec3 getSpotLight(vec3 normal){
             }
 
             // if fully illuminated 
+            // colors are scaled both by whether the normal points straight to the light, and where it is in the FOV.
             if (fov * (1-blend)/2 >= currentFov){
                 color += tint*(power/(4*3.1415*d*d))*cutoff;
             } else{
@@ -191,7 +204,6 @@ vec3 getSpotLight(vec3 normal){
                 color += tint*(power/(4*3.1415*d*d))*cutoff*(1-blendingFactor);
             }
         }
-
     }
     return color;
 }
@@ -200,7 +212,7 @@ vec3 getSunLight(vec3 normal){
     vec3 color = vec3(0.);
     mat4 light;
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 10; i++){
+    for (int i = 0; i < 5; i++){
         
         light = sunLight[i].data;
         if (light[0][0]<1) {
@@ -219,7 +231,10 @@ vec3 getSunLight(vec3 normal){
         // if (acos(dot(normalize(normal), -normalize(lightDirection)))<=angle){
         //     color += strength * tint;
         // }
-         color += strength * tint;
+        float ndotl = dot(normalize(normal), -normalize(lightDirection));
+        if (ndotl > 0){
+            color += strength * tint * ndotl;
+        }
         
     }
     return color;
@@ -233,8 +248,9 @@ void main() {
         (normalColor.x * tang.y) + (normalColor.y * bitang.y) +(normalColor.z * surfaceNormal.y),
         (normalColor.x * tang.z) + (normalColor.y * bitang.z) +(normalColor.z * surfaceNormal.z));
 
-    vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * rgbe2rgb(texture(albedoTexture, newNormal));
+    vec3 albedo = rgbe2rgb(texture(albedoTexture, newNormal));
+    vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * albedo;
 
-    outColor = toneMapReinhard(c+getSphereLight(newNormal)+getSpotLight(newNormal)+getSunLight(newNormal));
+    outColor = toneMapReinhard(c+(albedo*(getSphereLight(newNormal)+getSpotLight(newNormal)+getSunLight(newNormal))));
 }
 

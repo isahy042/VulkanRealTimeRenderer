@@ -36,11 +36,11 @@
 // using directive
 using namespace std;
 
-uint32_t WIDTH = 800;
-uint32_t HEIGHT = 800;
+uint32_t WIDTH = 900;
+uint32_t HEIGHT = 600;
 
 const int TEXTURE_COUNT = 7;
-const int MAX_LIGHT = 10;
+const int MAX_LIGHT = 50;
 const int MAX_SUN_LIGHT = 5;
 
 bool adjustDimension = true;
@@ -59,7 +59,7 @@ const std::vector<const char*> deviceExtensions = {
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
 #else
-const bool enableValidationLayers = true;
+const bool enableValidationLayers = false;
 #endif
 
 // defines how many frames should be processed concurrently
@@ -153,7 +153,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/shadow-pbr.s72";//lights - Mix.s72";//sg-Articulation.s72";//simple-light
+	string s72filepath = "s72-main/examples/light-pbr.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -254,9 +254,9 @@ private:
 	VkPipeline shadowGraphicsPipeline;
 	vector<VkFramebuffer> shadowFramebuffers; 
 
-	VkImage shadowDepthImage;
-	VkDeviceMemory shadowDepthImageMemory;
-	VkImageView shadowDepthImageView;
+	vector < VkImage> shadowDepthImage;
+	vector < VkDeviceMemory> shadowDepthImageMemory;
+	vector < VkImageView> shadowDepthImageView;
 
 	vector<VkBuffer> shadowLightBuffers;
 	vector<VkDeviceMemory> shadowLightBuffersMemory;
@@ -585,6 +585,7 @@ private:
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		createInfo.pApplicationInfo = &appInfo;
 
+
 		uint32_t glfwExtensionCount = 0;
 		const char** glfwExtensions;
 
@@ -596,6 +597,7 @@ private:
 		createInfo.enabledLayerCount = 0;
 
 		//  include the validation layer names if they are enabled
+		
 		if (enableValidationLayers) {
 			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 			createInfo.ppEnabledLayerNames = validationLayers.data();
@@ -870,10 +872,12 @@ private:
 		shadowImages.resize(MAX_LIGHT);
 		shadowImageViews.resize(MAX_LIGHT);
 		shadowImageMemory.resize(MAX_LIGHT);
-
-		for (int i = 0; i<MAX_LIGHT; i++) {
-
-			createImage(256, 256, swapChainImageFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowImages[i], shadowImageMemory[i]);
+		// for spot light
+		int totalSpotLight = scene.spotLightsShadow.size();
+		uint32_t shadow = 1; // if unsued, allocate size 1x1
+		for (int i = 0; i < MAX_LIGHT; i++) {
+			shadow = (i >= totalSpotLight) ? 1 : scene.spotLightsShadow[i];
+			createImage(shadow, shadow, swapChainImageFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowImages[i], shadowImageMemory[i]);
 
 			shadowImageViews[i] = createImageView(shadowImages[i], shadowImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 		}
@@ -1134,10 +1138,15 @@ private:
 		// resizing the container to hold all of the framebuffers
 		shadowFramebuffers.resize(shadowImageViews.size());
 
+		int totalSpotLight = scene.spotLightsShadow.size();
+		uint32_t shadow = 1; // if unsued, allocate size 1x1
+
 		// iterate through the image views and create framebuffers from them:
-		for (size_t i = 0; i < shadowImageViews.size(); i++) {
+		for (int i = 0; i < shadowImageViews.size(); i++) {
+			shadow = (i >= totalSpotLight) ? 1 : scene.spotLightsShadow[i];
+
 			std::array<VkImageView, 2> attachments = {
-				shadowImageViews[i], shadowDepthImageView
+				shadowImageViews[i], shadowDepthImageView[i]
 			};
 
 			VkFramebufferCreateInfo framebufferInfo{};
@@ -1145,8 +1154,8 @@ private:
 			framebufferInfo.renderPass = renderPass;
 			framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 			framebufferInfo.pAttachments = attachments.data();
-			framebufferInfo.width = 256;
-			framebufferInfo.height = 256;
+			framebufferInfo.width = shadow;
+			framebufferInfo.height = shadow;
 			framebufferInfo.layers = 1;
 			if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &shadowFramebuffers[i]) 
 				!= VK_SUCCESS) {
@@ -1216,10 +1225,14 @@ private:
 
 	void createShadowDepthResources() {
 		VkFormat depthFormat = findDepthFormat();
+		uint32_t shadowSize = 1;
+		for (int i = 0; i < MAX_LIGHT; i++) {
+			shadowSize = (i >= scene.spotLightsShadow.size()) ? 1 : scene.spotLightsShadow[i];
+			createImage(shadowSize, shadowSize, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowDepthImage[i], shadowDepthImageMemory[i]);
+			shadowDepthImageView[i] = createImageView(shadowDepthImage[i], depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+		}
 
-		createImage(256,256, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowDepthImage, shadowDepthImageMemory);
-		shadowDepthImageView = createImageView(shadowDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 	}
 
 	// command pool - manage the memory that is used to store the buffers and command buffers are allocated from them
@@ -1378,15 +1391,14 @@ private:
 		memcpy(uniformBuffersMapped[objIndex][currentImage], &ubo, sizeof(ubo));
 	}
 
-	void updateShadowBuffer( int lightIndex, shared_ptr<Light> light) {
+	void updateShadowBuffer( int lightIndex, Scene::lightInstance light) {
 		//static auto startTime = std::chrono::high_resolution_clock::now();
 		LightObject l{};
-		std::memcpy(l.model, makeUboMatrix(transpose44(light->getTransformationMatrix())), 16 * sizeof(float));
-		std::memcpy(l.data, makeUboMatrix(light->getDataMatrix()), 16 * sizeof(float));
-		std::memcpy(l.proj, makeUboMatrix(light->getProjMatrix()), 16 * sizeof(float));
-		std::memcpy(l.view, makeUboMatrix(light->getViewMatrix()), 16 * sizeof(float));
-		view44(light->getViewMatrix(), "\n shad view\n");
-		view44(light->getProjMatrix(), "\n shad proj\n");
+		Vec3f dir = transformDir(light.transMat, Vec3f(0, 0, -1));
+		std::memcpy(l.model, makeUboMatrix(transpose44(light.transMat)), 16 * sizeof(float));
+		std::memcpy(l.data, makeUboMatrix(light.lightPtr->getDataMatrix(dir)), 16 * sizeof(float));
+		std::memcpy(l.proj, makeUboMatrix(light.lightPtr->getProjMatrix()), 16 * sizeof(float));
+		std::memcpy(l.view, makeUboMatrix(light.viewMat), 16 * sizeof(float));
 		memcpy(shadowLightBuffersMapped[lightIndex], &l, sizeof(l));
 	}
 
@@ -1399,17 +1411,18 @@ private:
 		// copying all lights
 		for (int i = 0; i < scene.lights.size(); i++) {
 
-			shared_ptr<Light> light = scene.lights[i];
+			Scene::lightInstance light = scene.lights[i];
 
 			// copy data to light object
 			LightObject l{};
-			std::memcpy(l.model, makeUboMatrix(transpose44(light->getTransformationMatrix())), 16 * sizeof(float));
-			std::memcpy(l.data, makeUboMatrix(light->getDataMatrix()), 16 * sizeof(float));
-			std::memcpy(l.proj, makeUboMatrix(light->getProjMatrix()), 16 * sizeof(float));
-			std::memcpy(l.view, makeUboMatrix(light->getViewMatrix()), 16 * sizeof(float));
+			Vec3f dir = transformDir(light.transMat, Vec3f(0, 0, -1));
+			std::memcpy(l.model, makeUboMatrix(transpose44(light.transMat)), 16 * sizeof(float));
+			std::memcpy(l.data, makeUboMatrix(light.lightPtr->getDataMatrix(dir)), 16 * sizeof(float));
+			std::memcpy(l.proj, makeUboMatrix(light.lightPtr->getProjMatrix()), 16 * sizeof(float));
+			std::memcpy(l.view, makeUboMatrix(light.viewMat), 16 * sizeof(float));
 
 			
-			if (light->getType() == 0 && sphereind < MAX_LIGHT) { //sphere
+			if (light.lightPtr->getType() == 0 && sphereind < MAX_LIGHT) { //sphere
 				/*cout << "\n showing sphere light at " << i;
 				view44(light->getTransformationMatrix(), "\n trans");
 				view44(light->getDataMatrix(), "\n data");*/
@@ -1417,7 +1430,7 @@ private:
 				memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
 				sphereind++;
 			}
-			else if (light->getType() == 1 && spotind < MAX_LIGHT) { //spot
+			else if (light.lightPtr->getType() == 1 && spotind < MAX_LIGHT) { //spot
 				//cout << "\n showing spot light at " << i;
 				//view44(light->getTransformationMatrix(), "\n trans");
 				//view44(light->getDataMatrix(), "\n data");
@@ -1425,7 +1438,7 @@ private:
 				memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
 				spotind++;
 			}
-			else if (light->getType() == 2 && sunind < MAX_SUN_LIGHT) { // sun
+			else if (light.lightPtr->getType() == 2 && sunind < MAX_SUN_LIGHT) { // sun
 				/*cout << "\n showing sun light at " << i;
 				view44(light->getTransformationMatrix(), "\n trans");
 				view44(light->getDataMatrix(), "\n data");*/
@@ -1641,8 +1654,11 @@ private:
 			vkDestroyShaderModule(device, vertShaderModule, nullptr);
 	}
 
-	void drawShadowMap(VkCommandBuffer commandBuffer, int lightIndex, shared_ptr<Light> light)
+	void drawShadowMap(VkCommandBuffer commandBuffer, int lightIndex, Scene::lightInstance light)
 	{
+
+		uint32_t shadow = scene.spotLightsShadow[lightIndex];
+
 		// wait for both last image render and shadow render is over.
 		vkWaitForFences(device, 1, &shadowFences[lightIndex], VK_TRUE, UINT64_MAX);
 
@@ -1675,8 +1691,8 @@ private:
 		renderPassInfo.renderPass = renderPass;
 		renderPassInfo.framebuffer = shadowFramebuffers[lightIndex];
 		renderPassInfo.renderArea.offset = { 0, 0 };
-		renderPassInfo.renderArea.extent.height = 256;
-		renderPassInfo.renderArea.extent.width = 256;
+		renderPassInfo.renderArea.extent.height = shadow;
+		renderPassInfo.renderArea.extent.width = shadow;
 
 		std::array<VkClearValue, 2> clearValues{};
 		clearValues[0].color = { {0.0f, 1.0f, 0.0f, 1.0f} };
@@ -1692,16 +1708,16 @@ private:
 		VkViewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = (float) 256;
-		viewport.height = (float)256;
+		viewport.width = (float)shadow;
+		viewport.height = (float)shadow;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
-		scissor.extent.width = 256;
-		scissor.extent.height = 256;
+		scissor.extent.width = shadow;
+		scissor.extent.height = shadow;
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);		
 
 		for (int obj = 0; obj < scene.objects.size(); obj++) {
@@ -1735,7 +1751,6 @@ private:
 	void drawFrame() {
 
 		// wait for prev frame
-		vkQueueWaitIdle(presentQueue);
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
 		uint32_t imageIndex;
@@ -1887,7 +1902,8 @@ private:
 
 	// for debugging
 	void saveShadowImg(string filename, int lightIndex) {
-		VkDeviceSize imageSize = 256*256 * 4;
+		uint32_t shadow = scene.spotLightsShadow[lightIndex];
+		VkDeviceSize imageSize = shadow * shadow * 4;
 
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
@@ -1906,16 +1922,17 @@ private:
 		region.imageSubresource.layerCount = 1;
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = {
-			256,
-			256,
+			shadow, shadow,
 			1
 		};
 		//cout << "\nsize!" << depthImage.size();
+
+
 		vkCmdCopyImageToBuffer(commandBuffer, shadowImages[lightIndex], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
 		endSingleTimeCommands(commandBuffer);
 
 		void* mappedMemory;
-		vkMapMemory(device, stagingBufferMemory, 0, 256*256 * 3, 0, &mappedMemory);
+		vkMapMemory(device, stagingBufferMemory, 0, shadow * shadow * 3, 0, &mappedMemory);
 
 		ofstream file(filename, std::ios::out | std::ios::binary | std::ios::trunc);
 		if (!file.is_open()) {
@@ -1924,11 +1941,11 @@ private:
 		}
 
 		// Write PPM header
-		file << "P6\n" << 256 << " " <<256 << "\n255\n";
+		file << "P6\n" << shadow << " " <<shadow<< "\n255\n";
 
 		// Access and print buffer contents (assuming buffer contains uint32_t data)
 		unsigned char* data = reinterpret_cast<unsigned char*>(mappedMemory);
-		for (size_t i = 0; i < 256*256 * 4; ++i) {
+		for (size_t i = 0; i < shadow * shadow * 4; ++i) {
 			//cout << data[i];
 			if (i % 4 != 3) file << data[i];
 		}
@@ -1984,9 +2001,12 @@ private:
 	}
 
 	void cleanupShadowSwapChain() {
-		vkDestroyImageView(device, shadowDepthImageView, nullptr);
-		vkDestroyImage(device, shadowDepthImage, nullptr);
-		vkFreeMemory(device, shadowDepthImageMemory, nullptr);
+		for (int i = 0; i < MAX_LIGHT; i++) {
+			vkDestroyImageView(device, shadowDepthImageView[i], nullptr);
+			vkDestroyImage(device, shadowDepthImage[i], nullptr);
+			vkFreeMemory(device, shadowDepthImageMemory[i], nullptr);
+		}
+
 
 		for (auto framebuffer : shadowFramebuffers) {
 			vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -2957,7 +2977,7 @@ private:
 			VkDeviceSize layerSize = imageSize / 6;
 
 			if (!pixels) {
-				throw std::runtime_error("failed to load texture image!");
+				throw std::runtime_error("failed to load texture image for no mipmap cube map!");
 			}
 
 			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
@@ -3284,14 +3304,14 @@ private:
 	}
 
 	// texture 
-	void transferShadowTextureImage(int lightIndex, shared_ptr<Light> light) {
+	void transferShadowTextureImage(int lightIndex, Scene::lightInstance light) {
 
-		unsigned int shadowSize = (unsigned int)light->getShadow();
+		unsigned int shadowSize = (lightIndex >= scene.spotLightsShadow.size()) ? 1 : scene.spotLightsShadow[lightIndex];
 
 		VkDeviceSize imageSize = shadowSize * shadowSize * 4;
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
-		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
@@ -3307,6 +3327,7 @@ private:
 			shadowSize,
 			1
 		};
+
 		vkCmdCopyImageToBuffer(commandBuffer, shadowImages[lightIndex], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
 		endSingleTimeCommands(commandBuffer);
 
@@ -3325,7 +3346,9 @@ private:
 	
 	// texture 
 	void createShadowTextureImage(int lightIndex) {
-		VkDeviceSize imageSize = 256*256 * 4;
+		uint32_t shadow = (lightIndex >= scene.spotLightsShadow.size())? 1 : scene.spotLightsShadow[lightIndex];
+
+		VkDeviceSize imageSize = shadow * shadow * 4;
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
 		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
@@ -3340,8 +3363,7 @@ private:
 		region.imageSubresource.layerCount = 1;
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = {
-			256,
-			256,
+			shadow, shadow,
 			1
 		};
 		//cout << "\nsize!" << depthImage.size();
@@ -3353,9 +3375,9 @@ private:
 		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
 		vkUnmapMemory(device, stagingBufferMemory);
 
-		createImage(256,256, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowTextureImage[lightIndex], shadowTextureImageMemory[lightIndex]);
+		createImage(shadow, shadow, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowTextureImage[lightIndex], shadowTextureImageMemory[lightIndex]);
 		transitionImageLayout(shadowTextureImage[lightIndex], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		copyBufferToImage(stagingBuffer, shadowTextureImage[lightIndex], 256, 256);
+		copyBufferToImage(stagingBuffer, shadowTextureImage[lightIndex], shadow, shadow);
 		transitionImageLayout(shadowTextureImage[lightIndex], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -3525,6 +3547,10 @@ private:
 		createDepthResources();
 		createFramebuffers();
 
+		shadowDepthImage.resize(MAX_LIGHT);
+		shadowDepthImageMemory.resize(MAX_LIGHT);
+		shadowDepthImageView.resize(MAX_LIGHT);
+
 		createShadowDepthResources();
 		createShadowFrameBuffers();
 
@@ -3626,13 +3652,17 @@ private:
 		//	}
 		//}
 
+		int t = 0;
+		float ti = 0;
 		while (!glfwWindowShouldClose(window)) {
+			auto startTime = std::chrono::high_resolution_clock::now();
 			executeKeyboardEvents();		
 			glfwPollEvents();
 
 			int lightIndex = 0;
+			//vkQueueWaitIdle(graphicsQueue);
 			for (int l = 0; l < scene.lights.size(); l++) {
-				if (scene.lights[l]->getType() == 1) { // spot light
+				if (scene.lights[l].lightPtr->getType() == 1) { // spot light
 					drawShadowMap(shadowCommandBuffers[lightIndex], lightIndex, scene.lights[l]);
 					// copy into shadow texture buffer.
 					transferShadowTextureImage(lightIndex, scene.lights[l]);
@@ -3640,14 +3670,21 @@ private:
 				}
 			}
 
-			/*uint32_t w = (currentShadowFrame == 1) ? 0 : 1;
-			vkWaitForFences(device, 1, &shadowFences[w], VK_TRUE, UINT64_MAX);*/
 			vkQueueWaitIdle(graphicsQueue);
-			
 			
 			drawFrame();
 			//break;
+			auto endTime = std::chrono::high_resolution_clock::now();
+			t++;
+			ti += std::chrono::duration<float, std::chrono::seconds::period>(endTime - startTime).count();
+			if (t % 100 == 0) {
+				cout << ti/100 << "s\n";
+				ti = 0.f;
+				t = 0;
+			}
 		}
+
+
 		vkDeviceWaitIdle(device);
 	}
 
@@ -3745,16 +3782,15 @@ private:
 			}
 		}
 
-
-			for (size_t i = 0; i < MAX_LIGHT; i++) {
-				vkDestroyBuffer(device, shadowLightBuffers[i], nullptr);
-				vkFreeMemory(device, shadowLightBuffersMemory[i], nullptr);
-
-				vkDestroySampler(device, shadowTextureSampler[i], nullptr);
-				vkDestroyImageView(device, shadowTextureImageView[i], nullptr);
-				vkDestroyImage(device, shadowTextureImage[i], nullptr);
-				vkFreeMemory(device, shadowTextureImageMemory[i], nullptr);
-			}
+		for (size_t i = 0; i < MAX_LIGHT; i++) {
+			vkDestroyBuffer(device, shadowLightBuffers[i], nullptr);
+			vkFreeMemory(device, shadowLightBuffersMemory[i], nullptr);
+			
+			vkDestroySampler(device, shadowTextureSampler[i], nullptr);
+			vkDestroyImageView(device, shadowTextureImageView[i], nullptr);
+			vkDestroyImage(device, shadowTextureImage[i], nullptr);
+			vkFreeMemory(device, shadowTextureImageMemory[i], nullptr);
+		}
 		
 
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -3775,7 +3811,6 @@ private:
 			vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
 			vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
 			vkDestroyFence(device, inFlightFences[i], nullptr);
-			vkDestroyFence(device, shadowFences[i], nullptr);
 		}
 		for (size_t i = 0; i < MAX_LIGHT; i++) {
 			vkDestroyFence(device, shadowFences[i], nullptr);
