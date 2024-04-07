@@ -40,7 +40,7 @@ uint32_t WIDTH = 900;
 uint32_t HEIGHT = 600;
 
 const int TEXTURE_COUNT = 7;
-const int MAX_LIGHT = 50;
+const int MAX_LIGHT = 100;
 const int MAX_SUN_LIGHT = 5;
 
 bool adjustDimension = true;
@@ -153,7 +153,7 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/light-pbr.s72";
+	string s72filepath = "s72-main/examples/soft.s72";
 
 	string PreferredCamera = "";
 	bool isCulling = true;
@@ -1409,6 +1409,12 @@ private:
 		int sunind = 0;
 
 		// copying all lights
+		Vec3f objPosMax = scene.objects[objIndex].bbmax;
+		Vec3f objPosMin = scene.objects[objIndex].bbmin;
+
+		float* notUsedLight = makeUboMatrix(Vec44f(Vec4f(0.f)));
+		float* oorLight = makeUboMatrix(Vec44f(Vec4f(2.f))); // out of range
+
 		for (int i = 0; i < scene.lights.size(); i++) {
 
 			Scene::lightInstance light = scene.lights[i];
@@ -1421,21 +1427,37 @@ private:
 			std::memcpy(l.proj, makeUboMatrix(light.lightPtr->getProjMatrix()), 16 * sizeof(float));
 			std::memcpy(l.view, makeUboMatrix(light.viewMat), 16 * sizeof(float));
 
+			LightObject lfake{}; // if current object is out of range of the light
+			std::memcpy(lfake.model, oorLight, 16 * sizeof(float));
+			std::memcpy(lfake.data, oorLight, 16 * sizeof(float));
+			std::memcpy(lfake.proj, oorLight, 16 * sizeof(float));
+			std::memcpy(lfake.view, oorLight, 16 * sizeof(float));
+
 			
 			if (light.lightPtr->getType() == 0 && sphereind < MAX_LIGHT) { //sphere
 				/*cout << "\n showing sphere light at " << i;
 				view44(light->getTransformationMatrix(), "\n trans");
 				view44(light->getDataMatrix(), "\n data");*/
-
-				memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
+				if (testBoundingBoxSphere(objPosMin, objPosMax, transformPos(light.transMat, Vec3f(0,0,0)), light.lightPtr->getLimit())) {
+					memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
+				}
+				else {
+					
+					memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &lfake, sizeof(l));
+				}
 				sphereind++;
 			}
 			else if (light.lightPtr->getType() == 1 && spotind < MAX_LIGHT) { //spot
 				//cout << "\n showing spot light at " << i;
 				//view44(light->getTransformationMatrix(), "\n trans");
 				//view44(light->getDataMatrix(), "\n data");
-
-				memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
+				if (testBoundingBoxSphere(objPosMin, objPosMax, transformPos(light.transMat, Vec3f(0, 0, 0)), light.lightPtr->getLimit())) {
+					memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
+				}
+				else {
+					cout << "lfake for obj at" << objPosMin.x<< " " << objPosMin.y << " " << objPosMin.z << " " << objPosMax.x<< " " << objPosMax.y <<" " << objPosMax .z<< " " << transformPos(light.transMat, Vec3f(0, 0, 0)).x << " " << transformPos(light.transMat, Vec3f(0, 0, 0)).y << " " << transformPos(light.transMat, Vec3f(0, 0, 0)).z<<" " << light.lightPtr->getLimit();
+					memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &lfake, sizeof(l));
+				}
 				spotind++;
 			}
 			else if (light.lightPtr->getType() == 2 && sunind < MAX_SUN_LIGHT) { // sun
@@ -1452,7 +1474,7 @@ private:
 		}
 
 		// tell the shader when to stop.
-		float* notUsedLight = makeUboMatrix(Vec44f(Vec4f(0.f)));
+		
 		LightObject l{};
 		std::memcpy(l.model, notUsedLight, 16 * sizeof(float));
 		std::memcpy(l.data, notUsedLight, 16 * sizeof(float));
@@ -3654,23 +3676,27 @@ private:
 
 		int t = 0;
 		float ti = 0;
+
+		int lightIndex = 0;
+		auto startTime1 = std::chrono::high_resolution_clock::now();
+		//vkQueueWaitIdle(graphicsQueue);
+		for (int l = 0; l < scene.lights.size(); l++) {
+			if (scene.lights[l].lightPtr->getType() == 1) { // spot light
+				drawShadowMap(shadowCommandBuffers[lightIndex], lightIndex, scene.lights[l]);
+				// copy into shadow texture buffer.
+				transferShadowTextureImage(lightIndex, scene.lights[l]);
+				lightIndex++;
+			}
+		}
+		auto endTime1 = std::chrono::high_resolution_clock::now();
+		vkQueueWaitIdle(graphicsQueue);
+		cout << "\nprerender time is " << std::chrono::duration<float, std::chrono::seconds::period>(endTime1 - startTime1).count();;
+
 		while (!glfwWindowShouldClose(window)) {
 			auto startTime = std::chrono::high_resolution_clock::now();
 			executeKeyboardEvents();		
 			glfwPollEvents();
 
-			int lightIndex = 0;
-			//vkQueueWaitIdle(graphicsQueue);
-			for (int l = 0; l < scene.lights.size(); l++) {
-				if (scene.lights[l].lightPtr->getType() == 1) { // spot light
-					drawShadowMap(shadowCommandBuffers[lightIndex], lightIndex, scene.lights[l]);
-					// copy into shadow texture buffer.
-					transferShadowTextureImage(lightIndex, scene.lights[l]);
-					lightIndex++;
-				}
-			}
-
-			vkQueueWaitIdle(graphicsQueue);
 			
 			drawFrame();
 			//break;

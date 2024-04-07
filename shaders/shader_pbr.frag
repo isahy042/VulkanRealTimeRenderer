@@ -52,7 +52,7 @@ layout(location = 0) out vec3 outColor;
 
 // Apply Reinhard tone mapping operator
 vec3 toneMapReinhard(vec3 linearRGB) {
-    return linearRGB;
+    //return linearRGB;
     float exposure = 1.0;
     return linearRGB / (linearRGB + vec3(1)) * exposure;
 }
@@ -95,7 +95,7 @@ vec3 mixColor(vec3 c1, vec3 c2, float p){
 }
 
 // dielectric reflect, metallic reflect and attenuate, diffuse attenuate
-vec3 getSphereLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,float metalness, vec2 envBRDF){
+vec3 getSphereLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,float metalness){
     vec3 color = vec3(0.);;
     vec3 attenuation = vec3(0.);
     vec3 specColor = vec3(0.);
@@ -106,46 +106,11 @@ vec3 getSphereLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,fl
     // iterate through lights, break out early if possible
     for (int i = 0; i < 10; i++){
 
-        // // check if in range of illumination
-        // float limit = light[1].w;        
-        // vec3 lightPos = vec3(sphereLight[i].model * vec4(0.0,0.0,0.0,1.0));
-        // float d = length(position - lightPos);
-        // float cutoff = 1 - pow(d/limit, 4.0);
-
-        // vec3 l = lightPos-position;
-
-        // if (cutoff <= 0 || dot(normalize(l), normalize(normal)) < 0) { // or, if in shadow
-        //     continue;
-        // }
-
-        // // get light specs
-        // vec3 tint = light[0].yzw;
-        // float shadow = light[1].x;
-        // float radius = light[1].y;
-        // float power = light[1].z;
-
-        // // determine whether the normal hits the light.
-        // // lambertian portion
-        
-        // float lengthOfN = dot(l, normalize(normal));
-        // float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
-        // bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
-        // if (intersect){
-        //     attenuation += tint * (power/(4*3.1415*d*d)) * cutoff * dot(normalize(l), normalize(normal))* (1/(3.1415926 * alpha * alpha));
-        // }
-
-        // // specular portion
-        // // get closest point on sphere.
-        // vec3 pointOnSphere = lightPos - (normalize(l) * radius);
-        // // dot with the closest point on the sphere
-        // float NoV = clamp(dot(normalize(pointOnSphere-position), reflected), -1.0, 0.99);
-        // if (NoV<0) { continue;}
-        // float specular = gammaEncode(texture(texSampler, vec2(roughness, NoV)).x);
-        // specColor += specular * power * tint;
-
         light = sphereLight[i].data;
         if (light[0][0]<1) {
             break;
+        } else if (light[0][0]>1){
+            continue;
         }
 
         // check if in range of illumination
@@ -180,44 +145,44 @@ vec3 getSphereLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,fl
 
         // specular portion
         if (dot(normalize(l), normalize(reflected)) >= 0){
-        // get closest point on sphere.
-        vec3 centerToRay = dot(l, reflected)*reflected - l;
-        vec3 closestPoint = l + centerToRay * clamp(radius/length(centerToRay),0.0,1.0);
-        float phis = atan(radius/d);
-        float phir = acos(dot(normalize(reflected),normalize(l)));
+            // get closest point on sphere.
+            vec3 centerToRay = dot(l, reflected) * reflected - l;
+            vec3 closestPoint = l + centerToRay * clamp(radius/length(centerToRay),0.0,1.0);
+            float phis = atan(radius/d);
+            float phir = acos(dot(normalize(reflected),normalize(l)));
+           
+            vec2 envBRDF = gammaEncode(texture(texSampler, vec2(roughness,  dot(normalize(reflected),normalize(l))))).xy;
+            float norm = alpha / clamp(alpha + radius/(2*d),0.01,1.0) ;
+            norm = 1/norm;
+            norm = norm * norm;
+            if (phir<phis){
+                specColor = tint * norm * (power+2) / (2*3.1415926);
+            }else{
+               specColor = tint *  norm *  (power+2) * pow(clamp(cos(phir-phis),0,1), power) / (2*3.1415926);
+            }
+        }
+        vec3 metal_brdf = mixColor(attenuation * albedo, specColor, roughness);
+        vec3 dielectric_brdf = mixColor(attenuation*albedo, attenuation * albedo + specColor, roughness);
+        color += mixColor(metal_brdf, dielectric_brdf, metalness);
 
-        float norm = alpha / clamp(alpha + radius/(2*d),0.01,1.0) ;
-        norm = 1/norm;
-        //norm = norm * norm;
-        //return vec3(phis/3.1415,0,0);
-        if (phir<phis){
-            specColor = tint * norm ;///* (power+2) / (2*3.1415926);
-        }else{
-            specColor = tint *  norm *  pow(cos(phir-phis), power) / (2*3.1415926);//(power+2) *
-        }
-        }
-       attenuation *= albedo;
- 
-       // mix attenuation and specular color based on metalness
-        color += mixColor(attenuation*albedo, specColor, roughness);
+    
        }
     return color;
 }
 
 
-
-
-vec3 getSpotLight(vec3 normal, vec3 reflected, vec3 albedo,float roughness){
+vec3 getSpotLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,float metalness){
     vec3 attenuation = vec3(0.);
     vec3 specColor = vec3(0.);
+    vec3 color = vec3(0.);
 
     mat4 light;
     float alpha = roughness * roughness;
 
     // iterate through lights, break out early if possible
     for (int i = 0; i < 10; i++){
-        light = spotLight[i].data;
-        if (light[0][0]<1) {
+               light = spotLight[i].data;
+        if (light[0][0]!=1.0) {
             break;
         }
 
@@ -225,10 +190,10 @@ vec3 getSpotLight(vec3 normal, vec3 reflected, vec3 albedo,float roughness){
         float limit = light[1].w;        
         vec3 lightPos = vec3(spotLight[i].model * vec4(0.0,0.0,0.0,1.0));
         float d = length(position - lightPos);
-        if (d-limit >=0) {
+        float cutoff = 1 - pow(d/limit, 4.0);
+        if (cutoff <= 0) {
             continue;
         }
-        float cutoff = 1 - pow(d/limit, 4.0);
 
         // get light specs
         vec3 tint = light[0].yzw;
@@ -244,50 +209,85 @@ vec3 getSpotLight(vec3 normal, vec3 reflected, vec3 albedo,float roughness){
         vec3 pointOnSphere = lightPos - (normalize(l) * radius);
         // get fov with the closest point on the sphere
         float currentFov = acos(dot(-normalize(pointOnSphere-position), normalize(lightDirection)));
-
+        
         vec4 lightSpaceLocation = spotLight[i].proj * spotLight[i].view * vec4(position, 1.0);
         lightSpaceLocation /= lightSpaceLocation.w;
-        vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, 1 - lightSpaceLocation.y) / 2;
-        float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x; // this may need to be gamma encoded?
+        vec2 sampleDepthAt = vec2(lightSpaceLocation.x + 1, lightSpaceLocation.y + 1) / 2;
 
-        if (length(l)/limit > depth + 0.05 || dot(normalize(-lightDirection), normalize(normal))<0 || dot(normalize(l), normalize(normal)) < 0){// pass if in shadow or opposite side of light
-            continue;
+        float depth = gammaEncode(texture(spotShadow[i], sampleDepthAt)).x;
+        // PCF
+        float neighborDepth = 4.0;
+        float shadowIncrec = 1/shadow;
+        float shadowOffset = 0.01;
+        float currentDepth = length(l)/limit;
+        if (dot(normalize(l), normalize(normal))<0){// 
+             continue;
         }
+
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x + shadowIncrec, sampleDepthAt.y))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x - shadowIncrec, sampleDepthAt.y))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x, sampleDepthAt.y + shadowIncrec))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        if (gammaEncode(texture(spotShadow[i], vec2(sampleDepthAt.x, sampleDepthAt.y - shadowIncrec))).x + shadowOffset < currentDepth) {neighborDepth --;}
+        //if (currentDepth-depth > 1) {cutoff *= 1 - (currentDepth-depth)/limit; }
+        cutoff *= neighborDepth/4.0;
 
         // we will hit the object. assign color.
         if (fov/2 >= currentFov){
-            cutoff *= 40 * abs(dot(normalize(normal), -normalize(lightDirection)));//(1/(3.1415926 * alpha * alpha)); // * abs(dot(normalize(l), normalize(reflected)))
-            if (fov * (1-blend)/2 >= currentFov){
-                attenuation += tint*(power/(4*3.1415*d*d))*cutoff;
-            } else{
-                float blendingFactor = (currentFov - (fov * (1-blend)/2))/((fov/2)-(fov * (1-blend)/2));
-                attenuation += tint*(power/(4*3.1415*d*d))*cutoff*(1-blendingFactor);
-            }
-
-
-            // specular case
-            // dot with the closest point on the sphere
-            float lengthOfN = abs(dot(l, normalize( reflected)));
+            // update the cutoff adjustment factor identical to sphere light
+            float lengthOfN = dot(l, normalize(normal));
             float len = sqrt((length(l)*length(l)) - (lengthOfN*lengthOfN));
             bool intersect = ((lengthOfN >= 0.0) && (len <= radius));
-            if (!intersect) { continue;}
-            float NoV =  clamp(dot(normalize(pointOnSphere-position), reflected), 0.01, 0.99);
-            float specular = gammaEncode(texture(texSampler, vec2(roughness, NoV)).x);
-            specColor +=  power * tint * (1/(3.1415*alpha*alpha));
+            if (!intersect){
+                cutoff *= dot(normalize(l), normalize(normal));
+            }
+
+            // if fully illuminated 
+            // colors are scaled both by whether the normal points straight to the light, and where it is in the FOV.
+            if (fov * (1-blend)/2 >= currentFov){
+                attenuation = tint*(power/(4*3.1415*d*d))*cutoff;
+            } else{
+                float blendingFactor = (currentFov - (fov * (1-blend)/2))/((fov/2)-(fov * (1-blend)/2));
+                attenuation = tint*(power/(4*3.1415*d*d))*cutoff*(1-blendingFactor);
+            }
+
+            
         }
 
-
-
+        // specular 
+            if (dot(normalize(l), normalize(reflected)) >= 0){
+                // get closest point on sphere.
+                vec3 centerToRay = dot(l, reflected) * reflected - l;
+                vec3 closestPoint = l + centerToRay * clamp(radius/length(centerToRay),0.0,1.0);
+                float phis = atan(radius/d);
+                float phir = acos(dot(normalize(reflected),normalize(l)));
+            
+                vec2 envBRDF = gammaEncode(texture(texSampler, vec2(roughness,  dot(normalize(reflected),normalize(l))))).xy;
+                float norm = alpha / clamp(alpha + radius/(2*d),0.01,1.0) ;
+                norm = 1/norm;
+                norm = norm * norm;
+                if (phir<phis){
+                    specColor = tint * norm * (power+2) / (2*3.1415926);
+                }else{
+                specColor = tint *  norm *  (power+2) * pow(clamp(cos(phir-phis),0,1), power) / (2*3.1415926);
+                }
+            }
+       
+        vec3 metal_brdf = mixColor(attenuation * albedo, specColor, roughness);
+        vec3 dielectric_brdf = mixColor(attenuation*albedo, attenuation * albedo + specColor, roughness);
+        color += mixColor(metal_brdf, dielectric_brdf, metalness);
     }
-    return (attenuation*albedo) + specColor;
+    return color;
 }
 
-vec3 getSunLight(vec3 normal, vec3 reflected, vec3 albedo,float alpha){
+vec3 getSunLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,float metalness){
+    vec3 attenuation = vec3(0.);
+    vec3 specColor = vec3(0.);
     vec3 color = vec3(0.);
+
     mat4 light;
+    float alpha = roughness * roughness;
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 10; i++){
-        
+    for (int i = 0; i < 5; i++){
         light = sunLight[i].data;
         if (light[0][0]<1) {
             break;
@@ -301,10 +301,32 @@ vec3 getSunLight(vec3 normal, vec3 reflected, vec3 albedo,float alpha){
         float strength = light[1].z;
         vec3 lightDirection = light[2].xyz;
 
-        // TODO: change this.
-        if (acos(dot(normalize(normal), -normalize(lightDirection)))<=angle/2){
-            color += strength * tint;
+        // diffuse
+        float ndotl = dot(normalize(normal), -normalize(lightDirection));
+        if (ndotl > 0){
+            attenuation += strength * tint * ndotl;
         }
+
+        // spec
+        // instead of representative point, use light direction.
+        // specular remains within angle/2 of the sun
+        float rol = dot(normalize(reflected), -normalize(lightDirection));
+        if (rol >= 0 ){
+            // normalization term using the parameter angle instead of the solid angle formula.
+            float norm = alpha / (angle/2) ;
+            norm = 1/norm;
+            norm = norm * norm;
+            if (acos(rol) <= angle/2){
+                specColor = tint * norm * (strength+2) / (2*3.1415926);
+            } else{
+                specColor = tint *  norm *  (strength+2) * pow(rol, strength* 5) / (2*3.1415926); // strength*5 to further limit size of the specular
+            }
+        }
+
+       // return attenuation*albedo;
+        vec3 metal_brdf = mixColor(attenuation * albedo, specColor, roughness);
+        vec3 dielectric_brdf = mixColor(attenuation*albedo, attenuation * albedo + specColor, roughness);
+        color += mixColor(metal_brdf, dielectric_brdf, metalness);
         
     }
     return color;
@@ -337,6 +359,7 @@ void main() {
     vec3 dielectric_brdf = mixColor(albedo/3.14159, prefilteredColor,
        1- ((0.04 * EnvBRDF.x) + EnvBRDF.y));
 
-    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(newNormal, R, albedo, roughness, metalness, EnvBRDF));//+ getSphereLight(newNormal, R, albedo, roughness) +
-   // getSpotLight(newNormal, R, albedo, roughness) + getSunLight(newNormal, R, albedo, roughness));
+    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(newNormal, R, albedo, roughness, metalness)
+    + getSpotLight(newNormal, R, albedo, roughness, metalness) 
+    + getSunLight(newNormal, R, albedo, roughness, metalness));
 }

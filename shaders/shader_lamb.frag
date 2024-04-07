@@ -21,14 +21,14 @@ layout(binding = 8) uniform LightObject1 {
     mat4 data;
     mat4 proj;
     mat4 view;
-} sphereLight[10];
+} sphereLight[100];
 
 layout(binding = 9) uniform LightObject2 {
     mat4 model;
     mat4 data;
     mat4 proj;
     mat4 view;
-} spotLight[10];
+} spotLight[100];
 
 layout(binding = 10) uniform LightObject3 {
     mat4 model;
@@ -37,8 +37,8 @@ layout(binding = 10) uniform LightObject3 {
     mat4 view;
 } sunLight[5];
 
-layout (binding = 11) uniform sampler2D sphereShadow[10];
-layout (binding = 12) uniform sampler2D spotShadow[10];
+layout (binding = 11) uniform sampler2D sphereShadow[100];
+layout (binding = 12) uniform sampler2D spotShadow[100];
 layout (binding = 13) uniform sampler2D sunShadow[5];
 
 layout(location = 0) in vec3 surfaceNormal;
@@ -89,11 +89,13 @@ vec3 getSphereLight(vec3 normal){
     mat4 light;
 
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 10; i++){
+    for (int i = 0; i < 100; i++){
         
         light = sphereLight[i].data;
         if (light[0][0]<1) {
             break;
+        } else if (light[0][0]>1){
+            continue;
         }
 
         // check if in range of illumination
@@ -134,10 +136,10 @@ vec3 getSpotLight(vec3 normal){
     vec3 color = vec3(0.);
     mat4 light;
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 10; i++){
+    for (int i = 0; i < 100; i++){
         
         light = spotLight[i].data;
-        if (light[0][0]<1) {
+        if (light[0][0]!=1.0) {
             break;
         }
 
@@ -173,9 +175,9 @@ vec3 getSpotLight(vec3 normal){
         // PCF
         float neighborDepth = 4.0;
         float shadowIncrec = 1/shadow;
-        float shadowOffset = 0.01;
+        float shadowOffset = 0.0001;
         float currentDepth = length(l)/limit;
-        if (currentDepth > depth + shadowOffset || dot(normalize(l), normalize(normal))<0){// 
+        if (dot(normalize(l), normalize(normal))<0){// 
              continue;
         }
 
@@ -217,6 +219,8 @@ vec3 getSunLight(vec3 normal){
         light = sunLight[i].data;
         if (light[0][0]<1) {
             break;
+        } else if (light[0][0]>1){
+            continue;
         }
 
         // we assume sun is infinity away

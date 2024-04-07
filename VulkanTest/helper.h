@@ -363,6 +363,15 @@ Vec3f transformDir(Vec44f t, Vec3f pos) {
     return Vec3f(newp[0], newp[1], newp[2]);
 }
 
+bool testBoundingBoxSphere(Vec3f min, Vec3f max, Vec3f center, float radius) {
+    Vec3f cmin = center - radius;
+    Vec3f cmax = center + radius;
+    bool xInRange = (max.x >= cmin.x && max.x <= cmax.x) || (min.x >= cmin.x && min.x <= cmax.x);
+    bool yInRange = (max.y >= cmin.y && max.y <= cmax.y) || (min.y >= cmin.y && min.y <= cmax.y);
+    bool zInRange = (max.z >= cmin.z && max.z <= cmax.z) || (min.z >= cmin.z && min.z <= cmax.z);
+    return xInRange && yInRange && zInRange;
+}
+
 /**
 Quick to-string debugging functions
 */

@@ -143,7 +143,6 @@ private:
         float weight2 = (t - times[interval]) / intervalSize;
         float weight1 = 1 - weight2;
 
-        cout << "\n" << ((weight1 * values3[interval]) + (weight2 * values3[interval + 1])).y;
         return (weight1 * values3[interval]) + (weight2 * values3[interval + 1]);
     }
 

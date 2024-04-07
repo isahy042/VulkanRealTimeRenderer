@@ -19,6 +19,7 @@ public:
     virtual void setTransformationMatrix(Vec44f m) {};
     virtual Vec44f getTransformationMatrix() { return Vec44f(Vec4f(0.f)); };
     virtual Vec44f getProjMatrix() { return Vec44f(Vec4f(0.f)); };
+    virtual float getLimit() { return 0.f; };
     virtual Vec44f getDataMatrix(Vec3f dir) { return Vec44f(Vec4f(0.f)); };
     virtual Vec44f getViewMatrix() { return Vec44f(Vec4f(0.f)); };
     virtual int getType() { return -1; };
@@ -88,6 +89,8 @@ public:
     }
     int getType() override { return type; };
     int getShadow() override { return shadow; };
+    float getLimit() override { return 0.f; };
+
 
 };
 
@@ -158,6 +161,7 @@ public:
     }
     int getType() override { return type; };
     int getShadow() override { return shadow; };
+    float getLimit() override { return limit; };
 
 
 };
@@ -245,6 +249,7 @@ public:
             Vec4f(fov, blend, 0.f,0.f),
             Vec4f(dir.x, dir.y, dir.z, 0.0f));
     }
+    float getLimit() override { return limit; };
 
     int getType() override { return type; };
     int getShadow() override { return shadow; };

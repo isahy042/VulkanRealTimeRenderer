@@ -109,7 +109,7 @@ public:
                 {
                     string objName = line.substr(9, 5);
                     obji++;
-                     cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
+                     //cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {

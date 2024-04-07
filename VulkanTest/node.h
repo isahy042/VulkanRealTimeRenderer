@@ -110,6 +110,7 @@ public:
     vector<Vec4f> tangent;
     vector<Vec2f> texcoord;
     vector<Vec4f> color;
+    vector<int> lights;
 
 
     Vec3f bbmax;
