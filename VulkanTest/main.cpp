@@ -9,10 +9,10 @@
 #include <glm/gtc/type_ptr.hpp> // For glm::make_mat4
 #include <glm/gtx/quaternion.hpp>
 
-# include <vulkan/vulkan.h>
+#include <vulkan/vulkan.h>
 
-# include <iostream>
-# include <stdexcept>
+#include <iostream>
+#include <stdexcept>
 #include <fstream>
 
 # include <vector>
@@ -28,6 +28,9 @@
 #include <algorithm> // Necessary for std::clamp
 
 #include <chrono>
+
+#include <openvdb/openvdb.h>
+#include <openvdb/io/Stream.h>
 
 # include "s72parser.h"
 
@@ -3875,7 +3878,6 @@ int main(int argc, char* argv[]) {
 		if (argument == "--scene") { // scene name
 			try {
 				app.s72filepath = "s72-main/examples/" + string(argv[i + 1]);
-				cout << app.s72filepath;
 				cout << app.s72filepath;
 			}
 			catch (const std::exception& e) {

@@ -175,7 +175,7 @@ vec3 getSpotLight(vec3 normal){
         // PCF
         float neighborDepth = 4.0;
         float shadowIncrec = 1/shadow;
-        float shadowOffset = 0.0001;
+        float shadowOffset = 0.01;
         float currentDepth = length(l)/limit;
         if (dot(normalize(l), normalize(normal))<0){// 
              continue;
