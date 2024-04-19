@@ -305,6 +305,44 @@ public:
 	string getDisplacement() override { return displacementMap; }
 	string getNormal() override { return normalMap; }
 
+
+	void addObj(int obj) { objInstance.push_back(obj); }
+
+};
+class CloudMat : public Material {
+
+public:
+	string name;
+	string type = "cloud";
+	string vertShader = "vert.spv";
+	string fragShader = "cloud-frag.spv";
+	string color = "[0.5,0.5,0.5]";
+
+	string normalMap = "[0.5,0.5,1]"; // default value
+	string displacementMap = "[0,0,0]";
+	vector<int> objInstance;
+
+	string getVertshader() override { return vertShader; }
+	string getFragshader() override { return fragShader; }
+	vector<int> getObjList() override { return  objInstance; }
+	string getType()  override { return type; };
+
+	string getDisplacement() override { return displacementMap; }
+	string getNormal() override { return normalMap; }
+
+	string getBaseColor() override { return color; };
+
+	void setValue(string n, string val) override {
+		if (n == "name")
+		{
+			name = val.substr(1, val.size() - 3);
+		}
+		else if (n == "color")
+		{
+			color = val;
+		}
+	}
+
 	void addObj(int obj) { objInstance.push_back(obj); }
 
 };

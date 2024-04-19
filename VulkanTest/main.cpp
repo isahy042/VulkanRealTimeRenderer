@@ -29,11 +29,7 @@
 
 #include <chrono>
 
-#include <openvdb/openvdb.h>
-#include <openvdb/io/Stream.h>
-
 # include "s72parser.h"
-
 
 
 // using directive
@@ -43,12 +39,14 @@ uint32_t WIDTH = 900;
 uint32_t HEIGHT = 600;
 
 const int TEXTURE_COUNT = 7;
-const int MAX_LIGHT = 100;
-const int MAX_SUN_LIGHT = 5;
+const int MAX_LIGHT = 10;
+const int MAX_SUN_LIGHT = 1;
+const int CLOUD_LAYERS = 64;
+const int CLOUD_SIZE = 512;
 
 bool adjustDimension = true;
 
-const string currRepo = ""; // for some reason this needs to be added manually :(
+const string currRepo = "";
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -141,6 +139,11 @@ struct LightObject {
 	alignas(16) float view[16];
 };
 
+// structures for each type of light.
+struct CloudObject {
+	alignas(16) float data[16];
+};
+
 struct UniformBufferObject {
 	// std430 in the layout qualifier
 	alignas(16) float model[16]; //column major
@@ -156,10 +159,10 @@ class HelloTriangleApplication {
 public:
 	Scene scene = Scene();
 	// arguments initilized by args 
-	string s72filepath = "s72-main/examples/soft.s72";
+	string s72filepath = "s72-main/examples/cloud2.s72";
 
 	string PreferredCamera = "";
-	bool isCulling = true;
+	bool isCulling = false;//true;
 	bool isHeadless = false;
 	string eventsFile = "example.events";
 
@@ -278,6 +281,26 @@ private:
 
 	std::vector<VkFence> shadowFences;
 
+	// clouds
+	vector<VkBuffer> cloudBuffer;
+	vector<VkDeviceMemory> cloudBuffersMemory;
+	vector<void*> cloudBuffersMapped;
+
+	vector<VkImage> cloudTextureImage;
+	vector<VkDeviceMemory> cloudTextureImageMemory;
+	vector<VkImageView> cloudTextureImageView;
+	vector<VkSampler> cloudTextureSampler;
+
+	vector<VkImage> cloudFieldTextureImage;
+	vector<VkDeviceMemory> cloudFieldTextureImageMemory;
+	vector<VkImageView> cloudFieldTextureImageView;
+	vector<VkSampler> cloudFieldTextureSampler;
+
+	vector<VkImage> cloudNoiseTextureImage;
+	vector<VkDeviceMemory> cloudNoiseTextureImageMemory;
+	vector<VkImageView> cloudNoiseTextureImageView;
+	vector<VkSampler> cloudNoiseTextureSampler;
+
 	// descriptor set
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
@@ -305,6 +328,8 @@ private:
 
 	int totalFrames = 2;
 	int currentFrameIndex = 0;
+
+	int windOffset = 0;
 
 	string unusedTextureFile = "unused.png";
 
@@ -378,10 +403,10 @@ private:
 		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.05f;
 		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.1f;
 
-		else if (glfwGetKey(window, GLFW_KEY_RIGHT)) scene.cameraRot.y += 0.01f;
-		else if (glfwGetKey(window, GLFW_KEY_LEFT)) scene.cameraRot.y -= 0.01f;
-		else if (glfwGetKey(window, GLFW_KEY_DOWN)) scene.cameraRot.x += 0.01f;
-		else if (glfwGetKey(window, GLFW_KEY_UP)) scene.cameraRot.x -= 0.01f;
+		else if (glfwGetKey(window, GLFW_KEY_RIGHT)) scene.cameraRot.y += 0.001f;
+		else if (glfwGetKey(window, GLFW_KEY_LEFT)) scene.cameraRot.y -= 0.001f;
+		else if (glfwGetKey(window, GLFW_KEY_DOWN)) scene.cameraRot.x += 0.001f;
+		else if (glfwGetKey(window, GLFW_KEY_UP)) scene.cameraRot.x -= 0.001f;
 
 		else if (glfwGetKey(window, GLFW_KEY_R)) { 
 			scene.cameraMovement = Vec3f(0.f); 
@@ -994,7 +1019,13 @@ private:
 		// color blending
 		VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		colorBlendAttachment.blendEnable = VK_FALSE;
+		colorBlendAttachment.blendEnable = VK_TRUE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
 		VkPipelineColorBlendStateCreateInfo colorBlending{};
 		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1166,65 +1197,7 @@ private:
 			}
 		}
 
-	}/*
-	// render pass, depth, and frame buffers for the shadows
-	void createShadowRenderPass() {
-		VkAttachmentDescription colorAttachment{};
-		colorAttachment.format = shadowSwapChainImageFormat;
-		colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-		VkAttachmentDescription depthAttachment{};
-		depthAttachment.format = findDepthFormat();
-		depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference colorAttachmentRef{};
-		colorAttachmentRef.attachment = 0;
-		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference depthAttachmentRef{};
-		depthAttachmentRef.attachment = 1;
-		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkSubpassDescription subpass{};
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &colorAttachmentRef;
-		subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-		VkSubpassDependency dependency{};
-		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-		dependency.dstSubpass = 0;
-		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		dependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-		std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
-		VkRenderPassCreateInfo renderPassInfo{};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		renderPassInfo.pAttachments = attachments.data();
-		renderPassInfo.subpassCount = 1;
-		renderPassInfo.pSubpasses = &subpass;
-		renderPassInfo.dependencyCount = 1;
-		renderPassInfo.pDependencies = &dependency;
-
-		if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &shadowRenderPass) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create render pass!");
-		}
-	}*/
+	}
 
 	void createShadowDepthResources() {
 		VkFormat depthFormat = findDepthFormat();
@@ -1309,6 +1282,9 @@ private:
 		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		for (int mat=0; mat<totalMaterials; mat++){
+			if (!scene.cloud.visible && scene.materials[mat]->getType() == "cloud") {
+				continue;
+			} 
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline[mat]);
 
 			VkViewport viewport{};
@@ -1405,6 +1381,13 @@ private:
 		memcpy(shadowLightBuffersMapped[lightIndex], &l, sizeof(l));
 	}
 
+	void updateCloudBuffer(int index) {
+		CloudObject c;
+		scene.cloud.setWind(windOffset);
+		std::memcpy(c.data, makeUboMatrix(scene.cloud.data), 16 * sizeof(float));
+		memcpy(cloudBuffersMapped[index], &c, sizeof(c));
+	}
+
 	void updateLightBuffer(uint32_t currentImage, int objIndex) {
 		// for now, put all light in all light buffers.
 		int sphereind = 0;
@@ -1458,7 +1441,7 @@ private:
 					memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &l, sizeof(l));
 				}
 				else {
-					cout << "lfake for obj at" << objPosMin.x<< " " << objPosMin.y << " " << objPosMin.z << " " << objPosMax.x<< " " << objPosMax.y <<" " << objPosMax .z<< " " << transformPos(light.transMat, Vec3f(0, 0, 0)).x << " " << transformPos(light.transMat, Vec3f(0, 0, 0)).y << " " << transformPos(light.transMat, Vec3f(0, 0, 0)).z<<" " << light.lightPtr->getLimit();
+					/*cout << "lfake for obj at" << objPosMin.x<< " " << objPosMin.y << " " << objPosMin.z << " " << objPosMax.x<< " " << objPosMax.y <<" " << objPosMax .z<< " " << transformPos(light.transMat, Vec3f(0, 0, 0)).x << " " << transformPos(light.transMat, Vec3f(0, 0, 0)).y << " " << transformPos(light.transMat, Vec3f(0, 0, 0)).z<<" " << light.lightPtr->getLimit();*/
 					memcpy(spotlightBuffersMapped[objIndex][currentImage][spotind], &lfake, sizeof(l));
 				}
 				spotind++;
@@ -1802,6 +1785,7 @@ private:
 			updateUniformBuffer(currentFrame, obj);
 			updateLightBuffer(currentFrame, obj);
 		}
+		updateCloudBuffer(currentFrame);
 
 		// manually reset the fence to the unsignaled state
 		// Only reset the fence if we are submitting work
@@ -2278,13 +2262,42 @@ private:
 		samplerLayoutBinding10.pImmutableSamplers = nullptr;
 		samplerLayoutBinding10.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		VkDescriptorSetLayoutBinding samplerLayoutBinding11{};
+		samplerLayoutBinding11.binding = 14;
+		samplerLayoutBinding11.descriptorCount = CLOUD_LAYERS;
+		samplerLayoutBinding11.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding11.pImmutableSamplers = nullptr;
+		samplerLayoutBinding11.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		VkDescriptorSetLayoutBinding samplerLayoutBinding12{};
+		samplerLayoutBinding12.binding = 15;
+		samplerLayoutBinding12.descriptorCount = CLOUD_LAYERS;
+		samplerLayoutBinding12.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding12.pImmutableSamplers = nullptr;
+		samplerLayoutBinding12.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		VkDescriptorSetLayoutBinding samplerLayoutBinding13{};
+		samplerLayoutBinding13.binding = 16;
+		samplerLayoutBinding13.descriptorCount = CLOUD_LAYERS;
+		samplerLayoutBinding13.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding13.pImmutableSamplers = nullptr;
+		samplerLayoutBinding13.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		VkDescriptorSetLayoutBinding cloudBinding{};
+		cloudBinding.binding = 17;
+		cloudBinding.descriptorCount = 1;
+		cloudBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		cloudBinding.pImmutableSamplers = nullptr;
+		cloudBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		// TODO: displacement, normal.
-		std::array<VkDescriptorSetLayoutBinding, 14> bindings = 
+		std::array<VkDescriptorSetLayoutBinding, 18> bindings = 
 		{ uboLayoutBinding, samplerLayoutBinding1,samplerLayoutBinding2,
 			samplerLayoutBinding3 ,samplerLayoutBinding4 ,samplerLayoutBinding5,
 			samplerLayoutBinding6, samplerLayoutBinding7, lightLayoutBinding,
 			lightLayoutBinding1,lightLayoutBinding2,samplerLayoutBinding8,
-		samplerLayoutBinding9, samplerLayoutBinding10};
+		samplerLayoutBinding9, samplerLayoutBinding10, samplerLayoutBinding11,
+		samplerLayoutBinding12, samplerLayoutBinding13, cloudBinding};
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -2298,7 +2311,7 @@ private:
 
 	void createDescriptorPool() {//descriptor set adding
 
-		std::array<VkDescriptorPoolSize, 14> poolSizes{};
+		std::array<VkDescriptorPoolSize, 18> poolSizes{};
 		// uniform buffer
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
@@ -2331,6 +2344,17 @@ private:
 		poolSizes[12].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_LIGHT);
 		poolSizes[13].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[13].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * MAX_SUN_LIGHT);
+
+		// cloud info
+		poolSizes[14].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[14].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * CLOUD_LAYERS);
+		poolSizes[15].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[15].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * CLOUD_LAYERS);
+		poolSizes[16].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[16].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects * CLOUD_LAYERS);
+
+		poolSizes[17].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[17].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * totalObjects);
 
 
 		VkDescriptorPoolCreateInfo poolInfo{};
@@ -2415,7 +2439,7 @@ private:
 				imageInfo7.imageView = textureImageView[materialIndex][6];
 				imageInfo7.sampler = textureSampler[materialIndex][6];
 
-				std::array<VkWriteDescriptorSet, 14> descriptorWrites{};
+				std::array<VkWriteDescriptorSet, 18> descriptorWrites{};
 
 				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[0].dstSet = descriptorSets[(i * totalObjects) + obj];
@@ -2583,6 +2607,71 @@ private:
 				descriptorWrites[13].descriptorCount = MAX_SUN_LIGHT;
 				descriptorWrites[13].pImageInfo = shadowInfoSun.data();
 
+
+				std::array<VkDescriptorImageInfo, CLOUD_LAYERS> cloudInfo;
+				std::array<VkDescriptorImageInfo, CLOUD_LAYERS> cloudInfoField;
+				std::array<VkDescriptorImageInfo, CLOUD_LAYERS> cloudInfoNoise;
+
+				for (size_t j = 0; j < CLOUD_LAYERS; j++) {
+
+					VkDescriptorImageInfo img{};
+					img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					img.imageView = cloudTextureImageView[j];
+					img.sampler = cloudTextureSampler[j];
+
+					VkDescriptorImageInfo img1{};
+					img1.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					img1.imageView = cloudFieldTextureImageView[j];
+					img1.sampler = cloudFieldTextureSampler[j];
+
+					VkDescriptorImageInfo img2{};
+					img2.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					img2.imageView = cloudNoiseTextureImageView[j];
+					img2.sampler = cloudNoiseTextureSampler[j];
+
+					cloudInfo[j] = img;
+					cloudInfoField[j] = img1;
+					cloudInfoNoise[j] = img2;
+					
+				}
+
+				descriptorWrites[14].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[14].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[14].dstBinding = 14;
+				descriptorWrites[14].dstArrayElement = 0;
+				descriptorWrites[14].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[14].descriptorCount = CLOUD_LAYERS;
+				descriptorWrites[14].pImageInfo = cloudInfo.data();
+
+				descriptorWrites[15].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[15].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[15].dstBinding = 15;
+				descriptorWrites[15].dstArrayElement = 0;
+				descriptorWrites[15].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[15].descriptorCount = CLOUD_LAYERS;
+				descriptorWrites[15].pImageInfo = cloudInfoField.data();
+
+				descriptorWrites[16].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[16].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[16].dstBinding = 16;
+				descriptorWrites[16].dstArrayElement = 0;
+				descriptorWrites[16].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[16].descriptorCount = CLOUD_LAYERS;
+				descriptorWrites[16].pImageInfo = cloudInfoNoise.data();
+
+				VkDescriptorBufferInfo cloudBufferInfo{};
+				cloudBufferInfo.buffer = cloudBuffer[i]; // for each max frame in flight
+				cloudBufferInfo.offset = 0;
+				cloudBufferInfo.range = sizeof(CloudObject);
+
+				descriptorWrites[17].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[17].dstSet = descriptorSets[(i * totalObjects) + obj];
+				descriptorWrites[17].dstBinding = 17;
+				descriptorWrites[17].dstArrayElement = 0;
+				descriptorWrites[17].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrites[17].descriptorCount = 1;
+				descriptorWrites[17].pBufferInfo = &cloudBufferInfo;
+
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 			}
 		}
@@ -2708,6 +2797,16 @@ private:
 		}
 	}
 
+	void createCloudBuffers() {
+		VkDeviceSize bufferSize = sizeof(CloudObject);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				cloudBuffer[i], cloudBuffersMemory[i]);
+
+			vkMapMemory(device, cloudBuffersMemory[i], 0, bufferSize, 0, &cloudBuffersMapped[i]);
+		}
+	}
 
 	void createShadowLightBuffers(int lightIndex) {
 		VkDeviceSize bufferSize = sizeof(LightObject);
@@ -3356,13 +3455,6 @@ private:
 		vkCmdCopyImageToBuffer(commandBuffer, shadowImages[lightIndex], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, 1, &region);
 		endSingleTimeCommands(commandBuffer);
 
-		// map memory
-		//void* data;
-		//vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-		//vkUnmapMemory(device, stagingBufferMemory);
-
-		/*createImage(WIDTH, HEIGHT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowTextureImage[frame][light], shadowTextureImageMemory[frame][light]);
-		transitionImageLayout(shadowTextureImage[frame][light], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);*/
 		copyBufferToImage(stagingBuffer, shadowTextureImage[lightIndex], shadowSize, shadowSize);
 		transitionImageLayout(shadowTextureImage[lightIndex], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
@@ -3483,6 +3575,92 @@ private:
 		textureImageView[matIndex][category] = createImageView(textureImage[matIndex][category], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
 
+	// create cloud texture
+	// image texture
+	void create2DCloudTexture() {
+
+		for (int i = 0; i < CLOUD_LAYERS; i++) {
+			std::stringstream s;
+			s << std::setw(3) << std::setfill('0') << std::to_string(i+1); // width 3, fill with zeros
+			std::string numstr = s.str();
+			createCloudTextureImage(scene.cloud.voxelPath + "modeling_data." + numstr +".tga", i, cloudTextureImage, cloudTextureImageMemory);
+			createCloudTextureImage(scene.cloud.voxelPath + "field_data." + numstr + ".tga", i, cloudFieldTextureImage, cloudFieldTextureImageMemory);
+			createCloudTextureImage(scene.cloud.noisePath + "NubisVoxelCloudNoise." + numstr + ".tga", i, cloudNoiseTextureImage, cloudNoiseTextureImageMemory);
+
+			createCloudTextureImageView(i, cloudTextureImage, cloudTextureImageView);
+			createCloudTextureImageView(i, cloudFieldTextureImage, cloudFieldTextureImageView);
+			createCloudTextureImageView(i, cloudNoiseTextureImage, cloudNoiseTextureImageView);
+
+			createCloudTextureSampler(i, cloudTextureSampler);
+			createCloudTextureSampler(i, cloudFieldTextureSampler);
+			createCloudTextureSampler(i, cloudNoiseTextureSampler);
+		}
+		
+	}
+
+	void createCloudTextureSampler(int index, vector<VkSampler>& textureSamp) {
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+		VkSamplerCreateInfo samplerInfo{};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_FALSE; // bypassing validation
+		samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSamp[index]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create texture sampler!");
+		}
+	}
+
+	// texture 
+	void createCloudTextureImage(string filename, int index, vector<VkImage>& textureImg, vector<VkDeviceMemory>& textureMem) {
+		int texWidth, texHeight, texChannels;
+
+		const char* charArray = filename.c_str();
+		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+		VkDeviceSize imageSize = texWidth * texHeight * 4;
+		VkDeviceSize layerSize = imageSize;
+
+		if (!pixels) {
+			throw std::runtime_error("failed to load texture image for cloud: " + filename);
+		}
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		// map memory
+		void* data;
+		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+		memcpy(data, pixels, static_cast<size_t>(imageSize));
+		vkUnmapMemory(device, stagingBufferMemory);
+		stbi_image_free(pixels);
+
+		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImg[index], textureMem[index]);
+		transitionImageLayout(textureImg[index], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToImage(stagingBuffer, textureImg[index], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+		transitionImageLayout(textureImg[index], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
+	void createCloudTextureImageView(int index, vector<VkImage>& textureImg, vector<VkImageView>& textureImgView)
+	{
+		textureImgView[index] = createImageView(textureImg[index], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+	}
+
+
 	// depth
 	void createDepthResources() {
 		VkFormat depthFormat = findDepthFormat();
@@ -3548,6 +3726,7 @@ private:
 	}
 
 	void initVulkan() {
+
 		cout << "\n Creating:";
 		createInstance();
 		createSurface();
@@ -3633,6 +3812,29 @@ private:
 		shadowLightBuffersMemory.resize(MAX_LIGHT);
 		shadowLightBuffersMapped.resize(MAX_LIGHT);
 
+		cloudBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+		cloudBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+		cloudBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+		cloudTextureImage.resize(CLOUD_LAYERS);
+		cloudTextureImageMemory.resize(CLOUD_LAYERS);
+		cloudTextureImageView.resize(CLOUD_LAYERS);
+		cloudTextureSampler.resize(CLOUD_LAYERS);
+
+		cloudFieldTextureImage.resize(CLOUD_LAYERS);
+		cloudFieldTextureImageMemory.resize(CLOUD_LAYERS);
+		cloudFieldTextureImageView.resize(CLOUD_LAYERS);
+		cloudFieldTextureSampler.resize(CLOUD_LAYERS);
+
+		cloudNoiseTextureImage.resize(CLOUD_LAYERS);
+		cloudNoiseTextureImageMemory.resize(CLOUD_LAYERS);
+		cloudNoiseTextureImageView.resize(CLOUD_LAYERS);
+		cloudNoiseTextureSampler.resize(CLOUD_LAYERS);
+
+		if (scene.cloud.visible) {
+			create2DCloudTexture();
+		}
+
 		cout << "\nDescriptor Pool";
 
 		createDescriptorPool();
@@ -3649,6 +3851,7 @@ private:
 		for (int i = 0; i < MAX_LIGHT; i++) {
 			createShadowLightBuffers(i);
 		}
+		createCloudBuffers();
 
 		createDescriptorSets();
 		createCommandBuffer();
@@ -3665,23 +3868,11 @@ private:
 	}
 
 	void mainLoop() {
-
-		//cout << "\nRendering.";
-		//int lightIndex = 0;
-		//for (int l = 0; l < scene.lights.size(); l++) {
-		//	if (scene.lights[l]->getType() == 1) { // spot light
-		//		drawShadowMap(shadowCommandBuffers[lightIndex], lightIndex, scene.lights[l]);
-		//		// copy into shadow texture buffer.
-		//		transferShadowTextureImage(lightIndex, scene.lights[l]);
-		//		lightIndex++;
-		//	}
-		//}
-
 		int t = 0;
 		float ti = 0;
 
 		int lightIndex = 0;
-		auto startTime1 = std::chrono::high_resolution_clock::now();
+		//auto startTime1 = std::chrono::high_resolution_clock::now();
 		//vkQueueWaitIdle(graphicsQueue);
 		for (int l = 0; l < scene.lights.size(); l++) {
 			if (scene.lights[l].lightPtr->getType() == 1) { // spot light
@@ -3691,17 +3882,31 @@ private:
 				lightIndex++;
 			}
 		}
-		auto endTime1 = std::chrono::high_resolution_clock::now();
+		//auto endTime1 = std::chrono::high_resolution_clock::now();
 		vkQueueWaitIdle(graphicsQueue);
-		cout << "\nprerender time is " << std::chrono::duration<float, std::chrono::seconds::period>(endTime1 - startTime1).count();;
+		//cout << "\nprerender time is " << std::chrono::duration<float, std::chrono::seconds::period>(endTime1 - startTime1).count();;
 
 		while (!glfwWindowShouldClose(window)) {
 			auto startTime = std::chrono::high_resolution_clock::now();
 			executeKeyboardEvents();		
 			glfwPollEvents();
 
-			
+			int lightIndex = 0;
+			//auto startTime1 = std::chrono::high_resolution_clock::now();
+			//vkQueueWaitIdle(graphicsQueue);
+			for (int l = 0; l < scene.lights.size(); l++) {
+				if (scene.lights[l].lightPtr->getType() == 1) { // spot light
+					drawShadowMap(shadowCommandBuffers[lightIndex], lightIndex, scene.lights[l]);
+					// copy into shadow texture buffer.
+					transferShadowTextureImage(lightIndex, scene.lights[l]);
+					lightIndex++;
+				}
+			}
+			//auto endTime1 = std::chrono::high_resolution_clock::now();
+			vkQueueWaitIdle(graphicsQueue);
+
 			drawFrame();
+			windOffset = (windOffset > 600) ? 0 : windOffset + 1;  // update windoffset
 			//break;
 			auto endTime = std::chrono::high_resolution_clock::now();
 			t++;
@@ -3870,6 +4075,9 @@ private:
 int main(int argc, char* argv[]) {
 	HelloTriangleApplication app;
 
+
+
+
 	// parsing arguments in the main function ..
 	bool validArgs = false;
 	
@@ -3959,6 +4167,7 @@ int main(int argc, char* argv[]) {
 	//	std::cerr << "invalid argument." << std::endl;
 	//	return EXIT_FAILURE;
 	//}
+
 
 	try {
 		app.run();

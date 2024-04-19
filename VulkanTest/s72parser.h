@@ -12,6 +12,7 @@
 #include <map>
 #include <cstdlib> 
 #include "camera.h"
+#include "cloud.h"
 #include "mesh.h"
 #include "driver.h"
 #include "materials.h"
@@ -59,6 +60,7 @@ public:
     vector<Driver> drivers;
     vector<Object> objects;
     vector<shared_ptr<Material>> materials;
+    Cloud cloud;
 
     struct lightInstance {
         shared_ptr<Light> lightPtr;
@@ -97,6 +99,7 @@ public:
 
         s72map.push_back(make_pair(-1,-1)); // 0 is invalid
         envMat = make_shared<Environment>();
+        cloud = Cloud(false);
 
         int obji = 0;
         while (getline(file, line))
@@ -109,7 +112,7 @@ public:
                 {
                     string objName = line.substr(9, 5);
                     obji++;
-                     //cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
+                    //cout << "finding object " << obji << " with name " << objName << " and size " << s72map.size()<< "\n";
                     // scene, node, mesh, camera, driver
                     if (objName == "SCENE") // 0 - scene
                     {
@@ -248,6 +251,17 @@ public:
                             materials.push_back(mat);
                             s72map.push_back(make_pair(5, materials.size() - 1));
                         }
+                        else if (type == "cloud") {
+                            shared_ptr<CloudMat> mat = make_shared<CloudMat>();
+                            mat->setValue("name", getValue(name));
+                            mat->setValue("normalMap", getValue(normalMap));
+                            mat->setValue("displacementMap", getValue(displacementMap));
+                            materials.push_back(mat);
+                            s72map.push_back(make_pair(5, materials.size() - 1));
+                            // update color of the cloud
+                            cloud.updateColor(tovec3f(mat->getBaseColor()));
+
+                        }
                     }
                     else if (objName == "ENVIR") // 6 - enviroment
                     {
@@ -321,7 +335,18 @@ public:
                             totalSpotLights++;
                         }
                     }
+                    else if (objName == "CLOUD") // 8 - cloud
+                    {
+                    cloud.visible = true;
+                    std::getline(file, line); // name
 
+                    while (line[0] != '}')
+                    {
+                        cloud.setValue(getName(line), getValue(line));
+                        std::getline(file, line);
+                    }
+                    s72map.push_back(make_pair(8,0));
+                    }
                 }
             }
 
@@ -335,6 +360,7 @@ public:
         for (int i = 0; i < drivers.size(); i++) drivers[i].initializeData();
 
         currCam = &cameras[preferredCameraIndex];
+        cloud.initializeCloud();
 
         return cameras[preferredCameraIndex].aspect;
     }
@@ -576,8 +602,6 @@ public:
                 cullNode(child, intersect);
             }
         }
-
-       
     }
 
     Vec44f generateTransformationMatrix(vector<Vec3f> scales, vector<Vec3f> trans, vector<Vec4f> rotates) {

@@ -34,11 +34,11 @@ layout(binding = 10) uniform LightObject3 {
     mat4 data;
     mat4 proj;
     mat4 view;
-} sunLight[5];
+} sunLight[1];
 
 layout (binding = 11) uniform sampler2D sphereShadow[10];
 layout (binding = 12) uniform sampler2D spotShadow[10];
-layout (binding = 13) uniform sampler2D sunShadow[5];
+layout (binding = 13) uniform sampler2D sunShadow[1];
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -47,7 +47,7 @@ layout(location = 3) in vec4 inColor;
 layout(location = 4) in vec3 tang;
 layout(location = 5) in vec3 bitang;
 
-layout(location = 0) out vec3 outColor;
+layout(location = 0) out vec4 outColor;
 
 
 // Apply Reinhard tone mapping operator
@@ -218,7 +218,7 @@ vec3 getSpotLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,floa
         // PCF
         float neighborDepth = 4.0;
         float shadowIncrec = 1/shadow;
-        float shadowOffset = 0.01;
+        float shadowOffset = 0.001;
         float currentDepth = length(l)/limit;
         if (dot(normalize(l), normalize(normal))<0){// 
              continue;
@@ -287,7 +287,7 @@ vec3 getSunLight(vec3 normal, vec3 reflected, vec3 albedo, float roughness,float
     mat4 light;
     float alpha = roughness * roughness;
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < 1; i++){
         light = sunLight[i].data;
         if (light[0][0]<1) {
             break;
@@ -359,7 +359,7 @@ void main() {
     vec3 dielectric_brdf = mixColor(albedo/3.14159, prefilteredColor,
        1- ((0.04 * EnvBRDF.x) + EnvBRDF.y));
 
-    outColor = toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(newNormal, R, albedo, roughness, metalness)
+    outColor = vec4(toneMapReinhard(mixColor(metal_brdf, dielectric_brdf, metalness) + getSphereLight(newNormal, R, albedo, roughness, metalness)
     + getSpotLight(newNormal, R, albedo, roughness, metalness) 
-    + getSunLight(newNormal, R, albedo, roughness, metalness));
+    + getSunLight(newNormal, R, albedo, roughness, metalness)),1);
 }

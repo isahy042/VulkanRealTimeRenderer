@@ -21,25 +21,25 @@ layout(binding = 8) uniform LightObject1 {
     mat4 data;
     mat4 proj;
     mat4 view;
-} sphereLight[100];
+} sphereLight[10];
 
 layout(binding = 9) uniform LightObject2 {
     mat4 model;
     mat4 data;
     mat4 proj;
     mat4 view;
-} spotLight[100];
+} spotLight[10];
 
 layout(binding = 10) uniform LightObject3 {
     mat4 model;
     mat4 data;
     mat4 proj;
     mat4 view;
-} sunLight[5];
+} sunLight[1];
 
-layout (binding = 11) uniform sampler2D sphereShadow[100];
-layout (binding = 12) uniform sampler2D spotShadow[100];
-layout (binding = 13) uniform sampler2D sunShadow[5];
+layout (binding = 11) uniform sampler2D sphereShadow[10];
+layout (binding = 12) uniform sampler2D spotShadow[10];
+layout (binding = 13) uniform sampler2D sunShadow[1];
 
 layout(location = 0) in vec3 surfaceNormal;
 layout(location = 1) in vec3 position;
@@ -48,7 +48,7 @@ layout(location = 3) in vec4 inColor;
 layout(location = 4) in vec3 tang;
 layout(location = 5) in vec3 bitang;
 
-layout(location = 0) out vec3 outColor;
+layout(location = 0) out vec4 outColor;
 
 vec3 rgbe2rgb(vec4 rgbe) {
     // Extract exponent
@@ -89,7 +89,7 @@ vec3 getSphereLight(vec3 normal){
     mat4 light;
 
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 100; i++){
+    for (int i = 0; i < 10; i++){
         
         light = sphereLight[i].data;
         if (light[0][0]<1) {
@@ -136,7 +136,7 @@ vec3 getSpotLight(vec3 normal){
     vec3 color = vec3(0.);
     mat4 light;
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 100; i++){
+    for (int i = 0; i < 10; i++){
         
         light = spotLight[i].data;
         if (light[0][0]!=1.0) {
@@ -214,7 +214,7 @@ vec3 getSunLight(vec3 normal){
     vec3 color = vec3(0.);
     mat4 light;
     // iterate through lights, break out early if possible
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < 1; i++){
         
         light = sunLight[i].data;
         if (light[0][0]<1) {
@@ -255,6 +255,7 @@ void main() {
     vec3 albedo = rgbe2rgb(texture(albedoTexture, newNormal));
     vec3 c = rgbe2rgb(texture(specularTexture, newNormal)) * albedo;
 
-    outColor = toneMapReinhard(c+(albedo*(getSphereLight(newNormal)+getSpotLight(newNormal)+getSunLight(newNormal))));
+
+    outColor = vec4(toneMapReinhard(c+(albedo*(getSphereLight(newNormal)+getSpotLight(newNormal)+getSunLight(newNormal)))), 1);
 }
 
