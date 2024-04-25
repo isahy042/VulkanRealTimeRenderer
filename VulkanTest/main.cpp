@@ -396,17 +396,28 @@ private:
 
 	// keyboard call back
 	void executeKeyboardEvents() {
-		if (glfwGetKey(window, GLFW_KEY_A)) scene.cameraMovement.x -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_D)) scene.cameraMovement.x += 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_W)) scene.cameraMovement.y += 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_S)) scene.cameraMovement.y -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_Z)) scene.cameraMovement.z -= 0.05f;
-		else if (glfwGetKey(window, GLFW_KEY_X)) scene.cameraMovement.z += 0.1f;
+		//if (glfwGetKey(window, GLFW_KEY_A) && scene.cameraMovement.x > -10000) scene.cameraMovement.x -= 0.05f;
+		//else if (glfwGetKey(window, GLFW_KEY_D) && scene.cameraMovement.x < 10000) scene.cameraMovement.x += 0.05f;
+		//else if (glfwGetKey(window, GLFW_KEY_W) && scene.cameraMovement.y < 10000) scene.cameraMovement.y += 0.05f;
+		//else if (glfwGetKey(window, GLFW_KEY_S) && scene.cameraMovement.y > -10000) scene.cameraMovement.y -= 0.05f;
+		//else if (glfwGetKey(window, GLFW_KEY_Z) && scene.cameraMovement.z > -10000) scene.cameraMovement.z -= 0.05f;
+		//else if (glfwGetKey(window, GLFW_KEY_X) && scene.cameraMovement.z < 10000) scene.cameraMovement.z += 0.1f;
 
-		else if (glfwGetKey(window, GLFW_KEY_RIGHT)) scene.cameraRot.y += 0.001f;
-		else if (glfwGetKey(window, GLFW_KEY_LEFT)) scene.cameraRot.y -= 0.001f;
-		else if (glfwGetKey(window, GLFW_KEY_DOWN)) scene.cameraRot.x += 0.001f;
-		else if (glfwGetKey(window, GLFW_KEY_UP)) scene.cameraRot.x -= 0.001f;
+		//else if (glfwGetKey(window, GLFW_KEY_RIGHT) && scene.cameraRot.y < 10000) scene.cameraRot.y += 0.001f;
+		//else if (glfwGetKey(window, GLFW_KEY_LEFT) && scene.cameraRot.y > -10000) scene.cameraRot.y -= 0.001f;
+		//else if (glfwGetKey(window, GLFW_KEY_DOWN) && scene.cameraRot.x < 10000) scene.cameraRot.x += 0.001f;
+		//else if (glfwGetKey(window, GLFW_KEY_UP) && scene.cameraRot.x > -10000) scene.cameraRot.x -= 0.001f;
+		if (glfwGetKey(window, GLFW_KEY_A) && scene.cameraMovement.x > -0.5f) scene.cameraMovement.x -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_D) && scene.cameraMovement.x < 0.5f) scene.cameraMovement.x += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_W) && scene.cameraMovement.y < 1.f) scene.cameraMovement.y += 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_S) && scene.cameraMovement.y > -0.5f) scene.cameraMovement.y -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_Z) && scene.cameraMovement.z > -0.5f) scene.cameraMovement.z -= 0.05f;
+		else if (glfwGetKey(window, GLFW_KEY_X) && scene.cameraMovement.z < 0.5f) scene.cameraMovement.z += 0.1f;
+
+		else if (glfwGetKey(window, GLFW_KEY_RIGHT) && scene.cameraRot.y < 0.01f) scene.cameraRot.y += 0.001f;
+		else if (glfwGetKey(window, GLFW_KEY_LEFT) && scene.cameraRot.y > -0.01f) scene.cameraRot.y -= 0.001f;
+		else if (glfwGetKey(window, GLFW_KEY_DOWN) && scene.cameraRot.x < 0.01f) scene.cameraRot.x += 0.001f;
+		else if (glfwGetKey(window, GLFW_KEY_UP) && scene.cameraRot.x > -0.01f) scene.cameraRot.x -= 0.001f;
 
 		else if (glfwGetKey(window, GLFW_KEY_R)) { 
 			scene.cameraMovement = Vec3f(0.f); 
@@ -1273,7 +1284,8 @@ private:
 		renderPassInfo.renderArea.extent = swapChainExtent;
 
 		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+		//clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+		clearValues[0].color = { {0.3f, 0.3f, 0.6f, 1.f} };
 		clearValues[1].depthStencil = { 1.0f, 0 };
 
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -1419,18 +1431,15 @@ private:
 			std::memcpy(lfake.proj, oorLight, 16 * sizeof(float));
 			std::memcpy(lfake.view, oorLight, 16 * sizeof(float));
 
-			
+			//cout << "\n showing sphere light at " << light.lightPtr->getType();
 			if (light.lightPtr->getType() == 0 && sphereind < MAX_LIGHT) { //sphere
-				/*cout << "\n showing sphere light at " << i;
-				view44(light->getTransformationMatrix(), "\n trans");
-				view44(light->getDataMatrix(), "\n data");*/
-				if (testBoundingBoxSphere(objPosMin, objPosMax, transformPos(light.transMat, Vec3f(0,0,0)), light.lightPtr->getLimit())) {
+
+				//if (testBoundingBoxSphere(objPosMin, objPosMax, transformPos(light.transMat, Vec3f(0,0,0)), light.lightPtr->getLimit())) {
+				//	memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
+				//}
+				//else {
 					memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &l, sizeof(l));
-				}
-				else {
-					
-					memcpy(spherelightBuffersMapped[objIndex][currentImage][sphereind], &lfake, sizeof(l));
-				}
+				//}
 				sphereind++;
 			}
 			else if (light.lightPtr->getType() == 1 && spotind < MAX_LIGHT) { //spot
@@ -3583,7 +3592,8 @@ private:
 			std::stringstream s;
 			s << std::setw(3) << std::setfill('0') << std::to_string(i+1); // width 3, fill with zeros
 			std::string numstr = s.str();
-			createCloudTextureImage(scene.cloud.voxelPath + "modeling_data." + numstr +".tga", i, cloudTextureImage, cloudTextureImageMemory);
+			//createCloudTextureImage(scene.cloud.voxelPath + "modeling_data (" + to_string(i+1) +").tga", i, cloudTextureImage, cloudTextureImageMemory);
+		createCloudTextureImage(scene.cloud.voxelPath + "modeling_data." + numstr +".tga", i, cloudTextureImage, cloudTextureImageMemory);
 			createCloudTextureImage(scene.cloud.voxelPath + "field_data." + numstr + ".tga", i, cloudFieldTextureImage, cloudFieldTextureImageMemory);
 			createCloudTextureImage(scene.cloud.noisePath + "NubisVoxelCloudNoise." + numstr + ".tga", i, cloudNoiseTextureImage, cloudNoiseTextureImageMemory);
 
@@ -3629,6 +3639,8 @@ private:
 
 		const char* charArray = filename.c_str();
 		stbi_uc* pixels = stbi_load(charArray, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+
 
 		VkDeviceSize imageSize = texWidth * texHeight * 4;
 		VkDeviceSize layerSize = imageSize;
@@ -4075,9 +4087,6 @@ private:
 int main(int argc, char* argv[]) {
 	HelloTriangleApplication app;
 
-
-
-
 	// parsing arguments in the main function ..
 	bool validArgs = false;
 	
@@ -4167,7 +4176,6 @@ int main(int argc, char* argv[]) {
 	//	std::cerr << "invalid argument." << std::endl;
 	//	return EXIT_FAILURE;
 	//}
-
 
 	try {
 		app.run();

@@ -23,9 +23,12 @@ public:
     string voxelPath = "Clouds/StormbirdCloud/TGA/";
     string noisePath = "Clouds/noise/";
 
+    Vec3f thunderColor = Vec3f(0.f, 1.f, 0.f);
+
     Vec3f grid = Vec3f(512,64,512);
     float size = 0.1;
     bool visible = false;
+    float thunder = 0;
 
     Vec44f data = Vec44f(Vec4f(0.0), Vec4f(0.0),
         Vec4f(0.0), Vec4f(0.0, 0.5, 0.5, 0.5));
@@ -52,6 +55,10 @@ public:
         {
             size = stof(val);
         }
+        else if (n == "thunder")
+        {
+            thunder = stof(val);
+        }
     }
 
     void updateColor(Vec3f c) {
@@ -69,7 +76,7 @@ public:
         Vec3f bbmax = ((grid - 1) * size) / 2;
 
         data = Vec44f(Vec4f(bbmin.x, bbmin.y, bbmin.z, 0),
-            Vec4f(bbmax.x, bbmax.y, bbmax.z, 0),
+            Vec4f(bbmax.x, bbmax.y, bbmax.z, thunder),
             Vec4f(grid.x, grid.y, grid.z, 0),
             Vec4f(size, data.w.y, data.w.z, data.w.w));
     }
